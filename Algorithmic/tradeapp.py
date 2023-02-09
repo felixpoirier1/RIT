@@ -27,12 +27,10 @@ class TradingApp():
         self.getTradingLimits()
         self.getAssets()
         self.getSecurities()
-        self.trading_limit = None
         
         self.securities_book = {}
         self.securities_history = {}
         self.securities_tas = {}
-
     
     def getCaseDetails(self):
         case = requests.get(self.url + '/case', headers=self.API_KEY).json()
@@ -98,7 +96,6 @@ class TradingApp():
         if ticker == None :
             securities = requests.get(self.url + '/securities', headers=self.API_KEY).json()
             self.tickers_name = []
-            print(self.tickers_name)
             self.tickers_data = {}
             for security in securities:
                 name = security["ticker"]
@@ -192,7 +189,7 @@ class TradingApp():
         
         return self.orders
 
-    def postOrder(self, action : str, ticker : str, quantity : int, price : float = None, type : str = "MARKET"):
+    def postOrder(self, action : str, ticker : str, quantity : int, price : float = None, type : str = "MARKET", ignore_limit : bool = False):
         """This method sends a post request with the order to the server
 
         Parameters
@@ -203,10 +200,12 @@ class TradingApp():
             The name of the security
         quantity : int
             The quantity of shares in the order
-        price : float
+        price : float, optional
             The price per share of the order (only if type is "LIMIT")
         type : str, optional
             "LIMIT" or "MARKET", by default "MARKET"
+        ignore_limit : bool, optional
+            If True, no error will be given even if the quantity is greater than the net limit, by default False
         """
         assert action in ["BUY", "SELL"]
         assert type in ["LIMIT", "MARKET"]
@@ -223,16 +222,19 @@ class TradingApp():
         order_ = requests.post(self.url + '/orders', headers=self.API_KEY, params=order_head)
         order = order_.json()
 
-        if order_.status_code == 200:
-            print(f"{type} {action} order for {ticker} was placed for {quantity} shares at {price}$ per share")
+        if (order_.status_code == 200):
+            if type == "LIMIT":
+                print(f"{fg(2)}{type} {action} order for {ticker} was placed for {quantity} shares at {price}$ per share {attr(0)}")
+            else:
+                print(f"{fg(2)}{type} {action} order for {ticker} was placed for {quantity} shares{attr(0)}")
             return order
 
-        elif order_.status_code==401:
-            print(f"Order for {ticker} is unauthorized")
+        elif (order_.status_code == 401):
+            print(f"{fg(1)} Order for {ticker} is unauthorized {attr(0)}")
             return None
         
-        elif order_.status_code==429:
-            print(f"Order for {ticker} was declined wait {order['wait']} seconds before trying again")
+        elif (order_.status_code == 429):
+            print(f"{fg(3)} Order for {ticker} was declined wait {order['wait']} seconds before trying again {attr(0)}")
             return order
 
     
@@ -262,8 +264,16 @@ class TradingApp():
             The id of the order
         """
         order_head = {'id': order_id} 
-        order = requests.delete(self.url + '/orders', headers=self.API_KEY, params=order_head).json()
-        return order
+        order_ = requests.delete(self.url + '/orders', headers=self.API_KEY, params=order_head)
+        order = order_.json()
+
+        if order_.status_code == 200:
+            print(f"Order {order_id} was successfully deleted")
+            return order
+        
+        elif order_.status_code==401:
+            print(f"Order {order_id} is unauthorized")
+            return None
     
     def getTenders(self):
         """Returns a list of all tenders
@@ -281,6 +291,33 @@ class TradingApp():
 
         return self.tenders
 
+    def postTender(self, id : int, accept : bool = True, price : float = None):
+        """Accepts or declines a tender
+
+        Parameters
+        ----------
+        id : int
+            The id of the tender
+        accept : bool, optional
+            If False, the tender will not be accepted, by default True
+        price : float, optional
+            The price per share to accept the tender at, by default None
+        """
+        if accept:
+            tender_head = {'id': id, 'price': price}
+            tender = requests.post(self.url + '/tenders', headers=self.API_KEY, params=tender_head)
+
+        else:
+            tender_head = {'id': id}
+            tender = requests.delete(self.url + '/tenders', headers=self.API_KEY, params=tender_head)
+        
+        if tender.status_code == 200:
+            print(f"Tender {id} was accepted")
+        
+        elif tender.status_code == 401:
+            print(f"Tender {id} is unauthorized")
+
+        return tender.status_code
 
 
         
