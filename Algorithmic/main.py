@@ -25,7 +25,14 @@ def streamPrice(app, **s_d):
             s_d["tickers_ask"][index] = securities[ticker]["ask"]
             s_d["tickers_bid"][index] = securities[ticker]["bid"]
             s_d["lock"].release()
-        print(s_d["tickers_bid"][:])
+        
+        time.sleep(0.1)
+        latest_tenders = app.getTenders()
+        if latest_tenders != None:
+            s_d["latest_tenders"].update(latest_tenders)
+        
+
+        #print(s_d["tickers_bid"][-1])
 
         #always use the .value attribute when accessing shared single value (mp.Value)
         s_d["streaming_started"].value = True
@@ -46,6 +53,18 @@ def main(app, **s_d):
             if s_d["tickers_bid"][:][s_d["tickers_name"][:].index("RITC")] > 10:
                 pass
 
+            if len(s_d["latest_tenders"].keys()) != 0:
+                all_tender_ids = list(s_d["latest_tenders"].keys())
+                all_tender_tickers = [s_d["latest_tenders"][tender_id]["ticker"] for tender_id in all_tender_ids]
+                all_tender_tick = [s_d["latest_tenders"][tender_id]["tick"] for tender_id in all_tender_ids]
+                all_tender_expiration = [s_d["latest_tenders"][tender_id]["expires"] for tender_id in all_tender_ids]
+                all_tender_price = [s_d["latest_tenders"][tender_id]["price"] for tender_id in all_tender_ids]
+                all_tender_quantity = [s_d["latest_tenders"][tender_id]["quantity"] for tender_id in all_tender_ids]
+
+                if all_tender_price[-1] > 10:
+                    print(f"executing tender {all_tender_ids[-1]}")
+                    time.sleep(2)
+                    app.postTender(all_tender_ids[-1])
 
 
 
@@ -64,9 +83,13 @@ if __name__ == "__main__":
     tickers_name[:] = list(app.getSecurities().keys())
 
     tickers_bid = mp.Array('f', len(tickers_name_))
-    tickers_bid[0] = 50
 
     tickers_ask = mp.Array('f', len(tickers_name_)) 
+
+    latest_tenders = {}
+    mgr = mp.Manager()
+    latest_tenders = mgr.dict()
+    latest_tenders.update(latest_tenders)
 
 
 
@@ -76,6 +99,7 @@ if __name__ == "__main__":
                     'tickers_name': tickers_name,
                     "tickers_bid": tickers_bid,
                     "tickers_ask": tickers_ask,
+                    "latest_tenders": latest_tenders,
                     "lock": lock
                     }
 

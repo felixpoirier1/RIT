@@ -283,13 +283,25 @@ class TradingApp():
         list
             list of all tenders
         """
-        tenders = requests.get(self.url + '/tenders', headers=self.API_KEY).json()
-        for tender in tenders:
-            name = tender["tender_id"]
-            del tender["tender_id"]
-            self.tenders[name] = tender
-
-        return self.tenders
+        tenders_ = requests.get(self.url + '/tenders', headers=self.API_KEY)
+        tenders = tenders_.json()
+        
+        if len(tenders) == 0:
+                print("No tenders")
+                return None
+        
+        self.tenders = {}
+        if tenders_.status_code == 200:
+            for tender in tenders:
+                name = tender["tender_id"]
+                del tender["tender_id"]
+                self.tenders[name] = tender
+            
+            return self.tenders
+        
+        elif tenders_.status_code == 401:
+            print("Unauthorized")
+            return None
 
     def postTender(self, id : int, accept : bool = True, price : float = None):
         """Accepts or declines a tender
@@ -304,8 +316,10 @@ class TradingApp():
             The price per share to accept the tender at, by default None
         """
         if accept:
-            tender_head = {'id': id, 'price': price}
+            tender_head = {'id': id}
+            print(tender_head)
             tender = requests.post(self.url + '/tenders', headers=self.API_KEY, params=tender_head)
+            print(tender.json())
 
         else:
             tender_head = {'id': id}
