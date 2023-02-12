@@ -2,6 +2,10 @@ from tradeapp import TradingApp
 import matplotlib.pyplot as plt
 import time
 import multiprocessing as mp
+import logging
+import sys
+
+logging.basicConfig(level=logging.DEBUG, handlers=[logging.StreamHandler(sys.stdout)])
 
 
 ##### Variables to share between processes #####
@@ -52,19 +56,21 @@ def main(app, **s_d):
 
             if s_d["tickers_bid"][:][s_d["tickers_name"][:].index("RITC")] > 10:
                 pass
+            print(" "*20, end ="\r")
+            print(s_d["tickers_bid"][:], end ="\r")
+            
+            # if len(s_d["latest_tenders"].keys()) != 0:
+            #     all_tender_ids = list(s_d["latest_tenders"].keys())
+            #     all_tender_tickers = [s_d["latest_tenders"][tender_id]["ticker"] for tender_id in all_tender_ids]
+            #     all_tender_tick = [s_d["latest_tenders"][tender_id]["tick"] for tender_id in all_tender_ids]
+            #     all_tender_expiration = [s_d["latest_tenders"][tender_id]["expires"] for tender_id in all_tender_ids]
+            #     all_tender_price = [s_d["latest_tenders"][tender_id]["price"] for tender_id in all_tender_ids]
+            #     all_tender_quantity = [s_d["latest_tenders"][tender_id]["quantity"] for tender_id in all_tender_ids]
 
-            if len(s_d["latest_tenders"].keys()) != 0:
-                all_tender_ids = list(s_d["latest_tenders"].keys())
-                all_tender_tickers = [s_d["latest_tenders"][tender_id]["ticker"] for tender_id in all_tender_ids]
-                all_tender_tick = [s_d["latest_tenders"][tender_id]["tick"] for tender_id in all_tender_ids]
-                all_tender_expiration = [s_d["latest_tenders"][tender_id]["expires"] for tender_id in all_tender_ids]
-                all_tender_price = [s_d["latest_tenders"][tender_id]["price"] for tender_id in all_tender_ids]
-                all_tender_quantity = [s_d["latest_tenders"][tender_id]["quantity"] for tender_id in all_tender_ids]
-
-                if all_tender_price[-1] > 10:
-                    print(f"executing tender {all_tender_ids[-1]}")
-                    time.sleep(2)
-                    app.postTender(all_tender_ids[-1])
+            #     if all_tender_price[-1] > 10:
+            #         print(f"executing tender {all_tender_ids[-1]}")
+            #         time.sleep(2)
+            #         app.postTender(all_tender_ids[-1])
 
 
 

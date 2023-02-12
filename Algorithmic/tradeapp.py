@@ -17,7 +17,6 @@ class TradingApp():
         self.host = host
         self.url = 'http://localhost:' + host + '/v1'
 
-        self.number = mp.Value('i', 0)
         self.latestBid = {}
         self.latestAsk = {}
         self.tickers = []
@@ -33,6 +32,8 @@ class TradingApp():
         self.securities_tas = {}
     
     def getCaseDetails(self):
+        """Gets the case details from the API and stores them in the class attributes. (period, tick & total_periods)
+        """
         case = requests.get(self.url + '/case', headers=self.API_KEY).json()
         self.period = case["period"]
         self.tick = case["tick"]
@@ -40,12 +41,16 @@ class TradingApp():
 
         
     def getTraderDetails(self):
+        """Gets the trader details from the API and stores them in the class attributes. (trader_id, first_name & last_name)
+        """
         trader = requests.get(self.url + '/trader', headers=self.API_KEY).json()
         self.trader_id = trader["trader_id"]
         self.first_name = trader["first_name"]
         self.last_name = trader["last_name"]
 
     def getTradingLimits(self):
+        """Gets the trading limits from the API and stores them in the class attributes. (limits)
+        """
         limits = requests.get(self.url + '/limits', headers=self.API_KEY).json()
         self.limits = {}
         for asset in limits:
@@ -53,7 +58,23 @@ class TradingApp():
             del asset["name"]
             self.limits[name] = asset
 
-    def getNews(self, since : int, limit: int, return_latest : bool = True) -> dict:
+    def getNews(self, since : int = 0, limit: int = None, return_latest : bool = True) -> dict:
+        """Gets the news from the API and stores them in the class attributes. (news)
+
+        Parameters
+        ----------
+        since : int, optional
+            Retrieve only news items after a particular news id.
+        limit : int, optional
+            Limit the number of news items returned.
+        return_latest : bool, optional
+            Only get newest news, by default True
+
+        Returns
+        -------
+        dict
+            dictionnary of news
+        """
         news_head = {'since':since, 'limit':limit}
         self.news = requests.get(self.url + '/news', headers=self.API_KEY, params=news_head).json()
         
@@ -62,7 +83,19 @@ class TradingApp():
         else:
             return self.news
 
-    def getAssets(self, ticker : str = None):
+    def getAssets(self, ticker : str = None) -> dict:
+        """Gets the assets from the API and stores them in the class attributes. (assets)
+
+        Parameters
+        ----------
+        ticker : str, optional
+            Only get specific asset, by default None
+
+        Returns
+        -------
+        dict
+            dictionnary of assets
+        """
         if ticker == None:
             self.assets = requests.get(self.url + '/assets', headers=self.API_KEY).json()
             return self.assets
@@ -73,6 +106,17 @@ class TradingApp():
 
         
     def getAssetsHistory(self, ticker: str, period: int = None, limit: int = None):
+        """_summary_
+
+        Parameters
+        ----------
+        ticker : str
+            _description_
+        period : int, optional
+            _description_, by default None
+        limit : int, optional
+            _description_, by default None
+        """
         if ((period == None) and (limit == None)):
             assets_history_head = {'ticker': ticker}
             assetshistory = requests.get(self.url + '/assets/history', headers=self.API_KEY, params=assets_history_head).json()
@@ -148,6 +192,8 @@ class TradingApp():
         securityhistory = requests.get(self.url + '/securities/history', headers=self.API_KEY, params=security_history_head).json()
         
         self.securities_history[ticker] = pd.DataFrame(securityhistory)
+
+        return self.securities_history[ticker]
 
     def getSecuritiesTas(self, ticker : str, after : int = None, period : int = None, limit : int = None):
         """Reutrns all  trades that were filled by all the participants for a given security

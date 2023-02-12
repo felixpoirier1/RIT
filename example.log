@@ -1,0 +1,69 @@
+DEBUG:matplotlib:matplotlib data path: C:\Users\Felix\Dev\RIT\ritenv\Lib\site-packages\matplotlib\mpl-data
+DEBUG:matplotlib:CONFIGDIR=C:\Users\Felix\.matplotlib
+DEBUG:matplotlib:interactive is False
+DEBUG:matplotlib:platform is win32
+DEBUG:matplotlib:CACHEDIR=C:\Users\Felix\.matplotlib
+DEBUG:matplotlib.font_manager:Using fontManager instance from C:\Users\Felix\.matplotlib\fontlist-v330.json
+DEBUG:root:[38;5;2mProgram started with host and API KEY : [1m9999 0CEN4JP9[0m
+DEBUG:urllib3.connectionpool:Starting new HTTP connection (1): localhost:9999
+DEBUG:urllib3.connectionpool:http://localhost:9999 "GET /v1/case HTTP/1.1" 200 155
+DEBUG:urllib3.connectionpool:Starting new HTTP connection (1): localhost:9999
+DEBUG:urllib3.connectionpool:http://localhost:9999 "GET /v1/trader HTTP/1.1" 200 74
+DEBUG:urllib3.connectionpool:Starting new HTTP connection (1): localhost:9999
+DEBUG:urllib3.connectionpool:http://localhost:9999 "GET /v1/limits HTTP/1.1" 200 238
+DEBUG:urllib3.connectionpool:Starting new HTTP connection (1): localhost:9999
+DEBUG:urllib3.connectionpool:http://localhost:9999 "GET /v1/assets HTTP/1.1" 200 873
+DEBUG:urllib3.connectionpool:Starting new HTTP connection (1): localhost:9999
+DEBUG:urllib3.connectionpool:http://localhost:9999 "GET /v1/securities HTTP/1.1" 200 4267
+DEBUG:urllib3.connectionpool:Starting new HTTP connection (1): localhost:9999
+DEBUG:urllib3.connectionpool:http://localhost:9999 "GET /v1/securities HTTP/1.1" 200 4267
+DEBUG:urllib3.connectionpool:Starting new HTTP connection (1): localhost:9999
+DEBUG:urllib3.connectionpool:http://localhost:9999 "GET /v1/securities HTTP/1.1" 200 4267
+DEBUG:matplotlib:matplotlib data path: C:\Users\Felix\Dev\RIT\ritenv\Lib\site-packages\matplotlib\mpl-data
+DEBUG:matplotlib:CONFIGDIR=C:\Users\Felix\.matplotlib
+DEBUG:matplotlib:interactive is False
+DEBUG:matplotlib:platform is win32
+DEBUG:matplotlib:CACHEDIR=C:\Users\Felix\.matplotlib
+DEBUG:matplotlib.font_manager:Using fontManager instance from C:\Users\Felix\.matplotlib\fontlist-v330.json
+DEBUG:matplotlib:matplotlib data path: C:\Users\Felix\Dev\RIT\ritenv\Lib\site-packages\matplotlib\mpl-data
+DEBUG:matplotlib:CONFIGDIR=C:\Users\Felix\.matplotlib
+DEBUG:matplotlib:interactive is False
+DEBUG:matplotlib:platform is win32
+DEBUG:matplotlib:CACHEDIR=C:\Users\Felix\.matplotlib
+DEBUG:matplotlib.font_manager:Using fontManager instance from C:\Users\Felix\.matplotlib\fontlist-v330.json
+DEBUG:urllib3.connectionpool:Starting new HTTP connection (1): localhost:9999
+DEBUG:urllib3.connectionpool:http://localhost:9999 "GET /v1/securities HTTP/1.1" 200 4270
+DEBUG:urllib3.connectionpool:Starting new HTTP connection (1): localhost:9999
+DEBUG:urllib3.connectionpool:http://localhost:9999 "GET /v1/tenders HTTP/1.1" 200 280
+DEBUG:urllib3.connectionpool:Starting new HTTP connection (1): localhost:9999
+DEBUG:urllib3.connectionpool:http://localhost:9999 "GET /v1/securities HTTP/1.1" 200 4270
+DEBUG:urllib3.connectionpool:Starting new HTTP connection (1): localhost:9999
+DEBUG:urllib3.connectionpool:http://localhost:9999 "GET /v1/tenders HTTP/1.1" 200 280
+DEBUG:urllib3.connectionpool:Starting new HTTP connection (1): localhost:9999
+DEBUG:urllib3.connectionpool:http://localhost:9999 "GET /v1/securities HTTP/1.1" 200 4269
+DEBUG:urllib3.connectionpool:Starting new HTTP connection (1): localhost:9999
+DEBUG:urllib3.connectionpool:http://localhost:9999 "GET /v1/tenders HTTP/1.1" 200 280
+DEBUG:urllib3.connectionpool:Starting new HTTP connection (1): localhost:9999
+DEBUG:urllib3.connectionpool:http://localhost:9999 "GET /v1/securities HTTP/1.1" 200 4271
+DEBUG:urllib3.connectionpool:Starting new HTTP connection (1): localhost:9999
+DEBUG:urllib3.connectionpool:http://localhost:9999 "GET /v1/tenders HTTP/1.1" 200 280
+DEBUG:urllib3.connectionpool:Starting new HTTP connection (1): localhost:9999
+DEBUG:urllib3.connectionpool:http://localhost:9999 "GET /v1/securities HTTP/1.1" 200 4273
+DEBUG:urllib3.connectionpool:Starting new HTTP connection (1): localhost:9999
+DEBUG:urllib3.connectionpool:http://localhost:9999 "GET /v1/tenders HTTP/1.1" 200 280
+DEBUG:urllib3.connectionpool:Starting new HTTP connection (1): localhost:9999
+DEBUG:urllib3.connectionpool:http://localhost:9999 "GET /v1/securities HTTP/1.1" 200 4269
+DEBUG:urllib3.connectionpool:Starting new HTTP connection (1): localhost:9999
+DEBUG:urllib3.connectionpool:http://localhost:9999 "GET /v1/tenders HTTP/1.1" 200 280
+DEBUG:urllib3.connectionpool:Starting new HTTP connection (1): localhost:9999
+DEBUG:urllib3.connectionpool:http://localhost:9999 "GET /v1/securities HTTP/1.1" 200 4269
+DEBUG:urllib3.connectionpool:Starting new HTTP connection (1): localhost:9999
+DEBUG:urllib3.connectionpool:http://localhost:9999 "GET /v1/tenders HTTP/1.1" 200 280
+DEBUG:urllib3.connectionpool:Starting new HTTP connection (1): localhost:9999
+DEBUG:urllib3.connectionpool:http://localhost:9999 "GET /v1/securities HTTP/1.1" 200 4268
+DEBUG:urllib3.connectionpool:Starting new HTTP connection (1): localhost:9999
+DEBUG:urllib3.connectionpool:http://localhost:9999 "GET /v1/tenders HTTP/1.1" 200 280
+DEBUG:urllib3.connectionpool:Starting new HTTP connection (1): localhost:9999
+DEBUG:urllib3.connectionpool:http://localhost:9999 "GET /v1/securities HTTP/1.1" 200 4267
+DEBUG:urllib3.connectionpool:Starting new HTTP connection (1): localhost:9999
+DEBUG:urllib3.connectionpool:http://localhost:9999 "GET /v1/tenders HTTP/1.1" 200 280
