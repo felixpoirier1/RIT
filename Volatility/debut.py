@@ -11,8 +11,7 @@ def var_list (month):
                 c2= "RTM2C"+str(i+44)
                 p2="RTM2P"+str(i+44)
                 list_var.extend([c1,p1,c2,p2])
-            
-        
+                
     else:  
         for i in range(1,nb_var):
                 
