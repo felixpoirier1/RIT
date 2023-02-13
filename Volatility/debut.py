@@ -50,35 +50,33 @@ def implied_volatility(price, S, K, T, r, IsCall,delta = None):
     return None
 
 
-def var_list(month):
-    """This method returns the list of indices for month 1 or month 2
-
-        Parameters
-        ----------
-        months : int
-            1 for the first month """
-            
+def var_list():
+    # return the list of securities we can trade on the actual period
     nb_var = 11
     list_var=[40]
     list_var[0]="RTM"
-    if month ==1 :
-        for i in range(1,nb_var):
-                
-            c1="RTM1C"+str(i+44)
-            p1= "RTM1P"+str(i+44)
-            c2= "RTM2C"+str(i+44)
-            p2="RTM2P"+str(i+44)
-            list_var.extend([c1,p1,c2,p2])
-            # list of variable for the first month 
-        
-    else:  
-        for i in range(1,nb_var):
-                
-            c2= "RTM2C"+str(i+44)
-            p2="RTM2P"+str(i+44)
-            list_var.extend([c2,p2])
-        
-        # list of varibale for the second month
+    if __name__ == "__main__": 
+        app=TradingApp("9999","EG6SMVYC")    
+        case = requests.get(app.url + '/case', headers=app.API_KEY).json()
+
+        if case["period"] ==1 :
+            for i in range(1,nb_var):
+                    
+                c1="RTM1C"+str(i+44)
+                p1= "RTM1P"+str(i+44)
+                c2= "RTM2C"+str(i+44)
+                p2="RTM2P"+str(i+44)
+                list_var.extend([c1,p1,c2,p2])
+                # list of variable for the first month 
+            
+        else:  
+            for i in range(1,nb_var):
+                    
+                c2= "RTM2C"+str(i+44)
+                p2="RTM2P"+str(i+44)
+                list_var.extend([c2,p2])
+            
+            # list of varibale for the second month
     return(list_var)
 
      
