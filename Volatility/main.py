@@ -3,8 +3,55 @@ import matplotlib.pyplot as plt
 import time
 import multiprocessing as mp
 from multiprocessing.managers import BaseManager, NamespaceProxy
+import requests
+
+def var_list():
+    # return the list of securities we can trade on the actual period
+    nb_var = 11
+    list_var=[40]
+    list_var[0]="RTM"
+    
+    app=TradingApp("9999","EG6SMVYC")    
+    case = requests.get(app.url + '/case', headers=app.API_KEY).json()
+
+    if case["period"] ==1 :
+        for i in range(1,nb_var):
+                
+            c1="RTM1C"+str(i+44)
+            p1= "RTM1P"+str(i+44)
+            c2= "RTM2C"+str(i+44)
+            p2="RTM2P"+str(i+44)
+            list_var.extend([c1,p1,c2,p2])
+            # list of variable for the first month 
+        
+    else:  
+        for i in range(1,nb_var):
+                
+            c2= "RTM2C"+str(i+44)
+            p2="RTM2P"+str(i+44)
+            list_var.extend([c2,p2])
+        
+        # list of varibale for the second month
+    return(list_var)
 
 
+class MyTradingApp(TradingApp):
+    def __init__(self, host, API_KEY):
+        super().__init__(host, API_KEY)
+    def varList(self):
+        nb_var = 11
+        list_var=[40]
+        list_var[0]="RTM" 
+        if self.period ==1 :
+            for i in range(1,nb_var):
+                    
+                c1="RTM1C"+str(i+44)
+                p1= "RTM1P"+str(i+44)
+                c2= "RTM2C"+str(i+44)
+                p2="RTM2P"+str(i+44)
+                list_var.extend([c1,p1,c2,p2])
+                # list of variable for the first month
+        
 ##### Variables to share between processes #####
 number = mp.Value('f', 0.00)
 # create array of n elements of type string
@@ -39,7 +86,7 @@ def main(app, **shared_data):
 BaseManager.register('TradingApp', TradingApp)
 
 if __name__ == "__main__":
-    app = TradingApp("9999", "0CEN4JP9")
+    app = MyTradingApp("9999", "0CEN4JP9")
 
     # shared data contains the data that will be shared between processes
     # it's important that data that is stored in shared_data and is declared using mp.Value,

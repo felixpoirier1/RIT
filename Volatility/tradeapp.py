@@ -17,7 +17,6 @@ class TradingApp():
         self.host = host
         self.url = 'http://localhost:' + host + '/v1'
 
-        self.number = mp.Value('i', 0)
         self.latestBid = {}
         self.latestAsk = {}
         self.tickers = []
@@ -27,35 +26,61 @@ class TradingApp():
         self.getTradingLimits()
         self.getAssets()
         self.getSecurities()
-        self.trading_limit = None
         
         self.securities_book = {}
         self.securities_history = {}
         self.securities_tas = {}
-
     
     def getCaseDetails(self):
+        """Gets the case details from the API and stores them in the class attributes. (period, tick & total_periods)
+        """
         case = requests.get(self.url + '/case', headers=self.API_KEY).json()
         self.period = case["period"]
         self.tick = case["tick"]
         self.total_periods = case["total_periods"]
 
+        return case
+
         
     def getTraderDetails(self):
+        """Gets the trader details from the API and stores them in the class attributes. (trader_id, first_name & last_name)
+        """
         trader = requests.get(self.url + '/trader', headers=self.API_KEY).json()
         self.trader_id = trader["trader_id"]
         self.first_name = trader["first_name"]
         self.last_name = trader["last_name"]
 
+        return trader
+
     def getTradingLimits(self):
+        """Gets the trading limits from the API and stores them in the class attributes. (limits)
+        """
         limits = requests.get(self.url + '/limits', headers=self.API_KEY).json()
         self.limits = {}
         for asset in limits:
             name = asset["name"]
             del asset["name"]
             self.limits[name] = asset
+        
+        return self.limits
 
-    def getNews(self, since : int, limit: int, return_latest : bool = True) -> dict:
+    def getNews(self, since : int = 0, limit: int = None, return_latest : bool = True) -> dict:
+        """Gets the news from the API and stores them in the class attributes. (news)
+
+        Parameters
+        ----------
+        since : int, optional
+            Retrieve only news items after a particular news id.
+        limit : int, optional
+            Limit the number of news items returned.
+        return_latest : bool, optional
+            Only get newest news, by default True
+
+        Returns
+        -------
+        dict
+            dictionnary of news
+        """
         news_head = {'since':since, 'limit':limit}
         self.news = requests.get(self.url + '/news', headers=self.API_KEY, params=news_head).json()
         
@@ -64,7 +89,19 @@ class TradingApp():
         else:
             return self.news
 
-    def getAssets(self, ticker : str = None):
+    def getAssets(self, ticker : str = None) -> dict:
+        """Gets the assets from the API and stores them in the class attributes. (assets)
+
+        Parameters
+        ----------
+        ticker : str, optional
+            Only get specific asset, by default None
+
+        Returns
+        -------
+        dict
+            dictionnary of assets
+        """
         if ticker == None:
             self.assets = requests.get(self.url + '/assets', headers=self.API_KEY).json()
             return self.assets
@@ -75,6 +112,17 @@ class TradingApp():
 
         
     def getAssetsHistory(self, ticker: str, period: int = None, limit: int = None):
+        """_summary_
+
+        Parameters
+        ----------
+        ticker : str
+            _description_
+        period : int, optional
+            _description_, by default None
+        limit : int, optional
+            _description_, by default None
+        """
         if ((period == None) and (limit == None)):
             assets_history_head = {'ticker': ticker}
             assetshistory = requests.get(self.url + '/assets/history', headers=self.API_KEY, params=assets_history_head).json()
@@ -98,7 +146,6 @@ class TradingApp():
         if ticker == None :
             securities = requests.get(self.url + '/securities', headers=self.API_KEY).json()
             self.tickers_name = []
-            print(self.tickers_name)
             self.tickers_data = {}
             for security in securities:
                 name = security["ticker"]
@@ -107,6 +154,11 @@ class TradingApp():
                 self.tickers_data[name] = security
            
             return self.tickers_data
+        
+        else:
+            security_head = {'ticker': ticker}
+            security = requests.get(self.url + '/securities', headers=self.API_KEY, params=security_head).json()
+            return security
     
     def getSecuritiesBook(self, ticker: str, limit : int = None):
         """Returns the security book which is a dataframe of bid and asks for a specific period
@@ -152,6 +204,8 @@ class TradingApp():
         
         self.securities_history[ticker] = pd.DataFrame(securityhistory)
 
+        return self.securities_history[ticker]
+
     def getSecuritiesTas(self, ticker : str, after : int = None, period : int = None, limit : int = None):
         """Reutrns all  trades that were filled by all the participants for a given security
 
@@ -192,7 +246,7 @@ class TradingApp():
         
         return self.orders
 
-    def postOrder(self, action : str, ticker : str, quantity : int, price : float = None, type : str = "MARKET"):
+    def postOrder(self, action : str, ticker : str, quantity : int, price : float = None, type : str = "MARKET", ignore_limit : bool = False):
         """This method sends a post request with the order to the server
 
         Parameters
@@ -203,10 +257,12 @@ class TradingApp():
             The name of the security
         quantity : int
             The quantity of shares in the order
-        price : float
+        price : float, optional
             The price per share of the order (only if type is "LIMIT")
         type : str, optional
             "LIMIT" or "MARKET", by default "MARKET"
+        ignore_limit : bool, optional
+            If True, no error will be given even if the quantity is greater than the net limit, by default False
         """
         assert action in ["BUY", "SELL"]
         assert type in ["LIMIT", "MARKET"]
@@ -223,16 +279,19 @@ class TradingApp():
         order_ = requests.post(self.url + '/orders', headers=self.API_KEY, params=order_head)
         order = order_.json()
 
-        if order_.status_code == 200:
-            print(f"{type} {action} order for {ticker} was placed for {quantity} shares at {price}$ per share")
+        if (order_.status_code == 200):
+            if type == "LIMIT":
+                print(f"{fg(2)}{type} {action} order for {ticker} was placed for {quantity} shares at {price}$ per share {attr(0)}")
+            else:
+                print(f"{fg(2)}{type} {action} order for {ticker} was placed for {quantity} shares{attr(0)}")
             return order
 
-        elif order_.status_code==401:
-            print(f"Order for {ticker} is unauthorized")
+        elif (order_.status_code == 401):
+            print(f"{fg(1)} Order for {ticker} is unauthorized {attr(0)}")
             return None
         
-        elif order_.status_code==429:
-            print(f"Order for {ticker} was declined wait {order['wait']} seconds before trying again")
+        elif (order_.status_code == 429):
+            print(f"{fg(3)} Order for {ticker} was declined wait {order['wait']} seconds before trying again {attr(0)}")
             return order
 
     
@@ -262,8 +321,16 @@ class TradingApp():
             The id of the order
         """
         order_head = {'id': order_id} 
-        order = requests.delete(self.url + '/orders', headers=self.API_KEY, params=order_head).json()
-        return order
+        order_ = requests.delete(self.url + '/orders', headers=self.API_KEY, params=order_head)
+        order = order_.json()
+
+        if order_.status_code == 200:
+            print(f"Order {order_id} was successfully deleted")
+            return order
+        
+        elif order_.status_code==401:
+            print(f"Order {order_id} is unauthorized")
+            return None
     
     def getTenders(self):
         """Returns a list of all tenders
@@ -273,14 +340,81 @@ class TradingApp():
         list
             list of all tenders
         """
-        tenders = requests.get(self.url + '/tenders', headers=self.API_KEY).json()
-        for tender in tenders:
-            name = tender["tender_id"]
-            del tender["tender_id"]
-            self.tenders[name] = tender
+        tenders_ = requests.get(self.url + '/tenders', headers=self.API_KEY)
+        tenders = tenders_.json()
+        
+        if len(tenders) == 0:
+                return None
+        
+        self.tenders = {}
+        if tenders_.status_code == 200:
+            for tender in tenders:
+                name = tender["tender_id"]
+                del tender["tender_id"]
+                self.tenders[name] = tender
+            
+            return self.tenders
+        
+        elif tenders_.status_code == 401:
+            print("Unauthorized")
+            return None
 
-        return self.tenders
+    def postTender(self, id : int, accept : bool = True, price : float = None):
+        """Accepts or declines a tender
 
+        Parameters
+        ----------
+        id : int
+            The id of the tender
+        accept : bool, optional
+            If False, the tender will not be accepted, by default True
+        price : float, optional
+            The price per share to accept the tender at, by default None
+        """
+        if accept:
+            tender_head = {'id': id}
+            print(tender_head)
+            tender = requests.post(self.url + '/tenders', headers=self.API_KEY, params=tender_head)
+            print(tender.json())
+
+        else:
+            tender_head = {'id': id}
+            tender = requests.delete(self.url + '/tenders', headers=self.API_KEY, params=tender_head)
+        
+        if tender.status_code == 200:
+            print(f"Tender {id} was accepted")
+        
+        elif tender.status_code == 401:
+            print(f"Tender {id} is unauthorized")
+
+        return tender.status_code
+
+    def getLeases(self):
+        """Returns a list of all leases
+
+        Returns
+        -------
+        list
+            list of all leases
+        """
+        leases_ = requests.get(self.url + '/leases', headers=self.API_KEY)
+        leases = leases_.json()
+        
+        if len(leases) == 0:
+                return None
+        
+        self.leases = {}
+        if leases_.status_code == 200:
+            for lease in leases:
+                name = lease["lease_id"]
+                del lease["lease_id"]
+                self.leases[name] = lease
+            
+            return self.leases
+        
+        elif leases_.status_code == 401:
+            print("Unauthorized")
+            return None
 
 
         
