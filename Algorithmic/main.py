@@ -40,7 +40,6 @@ def streamPrice(app, **s_d):
             time.sleep(2)
         #always use the .value attribute when accessing shared single value (mp.Value)
         s_d["streaming_started"].value = True
-        #number = float(bidask["asks"].iloc[0]["price"])
 
 
 ############### Main function ################
@@ -66,19 +65,42 @@ def main(app, **s_d):
 
             USD_ask = s_d["tickers_ask"][s_d["tickers_name"].index("USD")]
             USD_bid = s_d["tickers_bid"][s_d["tickers_name"].index("USD")]
-
+            
+            ARB_BOUND = 0.01
             if all([pos == 0 for pos in s_d["tickers_pos"][:]]):
-                print((BULL_ask + BEAR_ask)/USD_ask, RITC_bid*0.99)
-                if (BULL_ask + BEAR_ask)/USD_ask < RITC_bid*0.98:
+                print((BULL_ask + BEAR_ask)/USD_ask, RITC_bid)
+                if (BULL_ask + BEAR_ask)/USD_ask < RITC_bid*(1-ARB_BOUND):
+                    # take position
                     app.postOrder("SELL", "RITC", 100)
                     app.postOrder("BUY", "BULL", 100)
                     app.postOrder("BUY", "BEAR", 100)
                 
-                elif (BULL_bid + BEAR_bid)/USD_bid > RITC_ask*1.02:
+                    # cover position with limit
+                    app.postOrder("BUY", "RITC", 100, price = (BULL_ask + BEAR_ask)/USD_ask, type="LIMIT")
+                    app.postOrder("SELL", "BULL", 100, price = RITC_bid*USD_ask - BEAR_ask, type="LIMIT")
+                    app.postOrder("SELL", "BEAR", 100, price = RITC_bid*USD_ask - BULL_ask, type="LIMIT")
+
+                elif (BULL_bid + BEAR_bid)/USD_bid > RITC_ask*(1+ARB_BOUND):
+                    # take position
                     app.postOrder("BUY", "RITC", 100)
                     app.postOrder("SELL", "BULL", 100)
                     app.postOrder("SELL", "BEAR", 100)
+                    
+                    # cover position with limit
+                    app.postOrder("SELL", "RITC", 100, price = (BULL_bid + BEAR_bid)/USD_bid, type="LIMIT")
+                    app.postOrder("BUY", "BULL", 100, price = RITC_ask*USD_bid - BEAR_bid, type="LIMIT")
+                    app.postOrder("BUY", "BEAR", 100, price = RITC_ask*USD_bid - BULL_bid, type="LIMIT")
+
+
+                time.sleep(0.2)
             
+            # elif any([pos != 0 for pos in s_d["tickers_pos"][:]]):
+            #     if ((BULL_ask + BEAR_ask)/USD_ask > RITC_bid*(1-ARB_BOUND)) or ((BULL_bid + BEAR_bid)/USD_bid < RITC_ask*(1+ARB_BOUND)):
+            #         for index, pos in enumerate(s_d["tickers_pos"][:]):
+            #             if pos != 0:
+            #                 app.postOrder("SELL" if pos > 0 else "BUY", s_d["tickers_name"][index], abs(pos))
+            
+
 
 
 
@@ -93,22 +115,24 @@ if __name__ == "__main__":
     # I recommend declaring these variables right after the imports and before the functions
     # see above for an examples.
 
-    # retrieves the list of tickers and stores it in a shared list
-    tickers_name_ = list(app.getSecurities().keys())
+    # retrieves the list of tickers and stores it in a shared lis
+    
+    securities_info = app.getSecurities()
+    tickers_name_ = list(securities_info.keys())
     tickers_name = [mp.Array('c', 1) for i in range(len(tickers_name_))]
-    tickers_name[:] = list(app.getSecurities().keys())
+    tickers_name[:] = list(securities_info.keys())
 
     tickers_bid = mp.Array('f', len(tickers_name_))
-
     tickers_ask = mp.Array('f', len(tickers_name_)) 
-
     tickers_pos = mp.Array('f', len(tickers_name_))
+
+    tickers_fee = mp.Array('f', len(tickers_name_))
+    tickers_fee[:] = [securities_info[ticker]["trading_fee"] for ticker in tickers_name_]
 
     latest_tenders = {}
     mgr = mp.Manager()
     latest_tenders = mgr.dict()
     latest_tenders.update(latest_tenders)
-
 
     shared_data = {
                     'streaming_started': streaming_started,
@@ -116,6 +140,7 @@ if __name__ == "__main__":
                     "tickers_bid": tickers_bid,
                     "tickers_ask": tickers_ask,
                     "tickers_pos": tickers_pos,
+                    "tickers_fee": tickers_fee,
                     "latest_tenders": latest_tenders,
                     "lock": lock
                     }
