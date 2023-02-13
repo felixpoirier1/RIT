@@ -39,6 +39,8 @@ class TradingApp():
         self.tick = case["tick"]
         self.total_periods = case["total_periods"]
 
+        return case
+
         
     def getTraderDetails(self):
         """Gets the trader details from the API and stores them in the class attributes. (trader_id, first_name & last_name)
@@ -47,6 +49,8 @@ class TradingApp():
         self.trader_id = trader["trader_id"]
         self.first_name = trader["first_name"]
         self.last_name = trader["last_name"]
+
+        return trader
 
     def getTradingLimits(self):
         """Gets the trading limits from the API and stores them in the class attributes. (limits)
@@ -57,6 +61,8 @@ class TradingApp():
             name = asset["name"]
             del asset["name"]
             self.limits[name] = asset
+        
+        return self.limits
 
     def getNews(self, since : int = 0, limit: int = None, return_latest : bool = True) -> dict:
         """Gets the news from the API and stores them in the class attributes. (news)
@@ -148,6 +154,11 @@ class TradingApp():
                 self.tickers_data[name] = security
            
             return self.tickers_data
+        
+        else:
+            security_head = {'ticker': ticker}
+            security = requests.get(self.url + '/securities', headers=self.API_KEY, params=security_head).json()
+            return security
     
     def getSecuritiesBook(self, ticker: str, limit : int = None):
         """Returns the security book which is a dataframe of bid and asks for a specific period
@@ -333,7 +344,6 @@ class TradingApp():
         tenders = tenders_.json()
         
         if len(tenders) == 0:
-                print("No tenders")
                 return None
         
         self.tenders = {}
@@ -378,6 +388,33 @@ class TradingApp():
             print(f"Tender {id} is unauthorized")
 
         return tender.status_code
+
+    def getLeases(self):
+        """Returns a list of all leases
+
+        Returns
+        -------
+        list
+            list of all leases
+        """
+        leases_ = requests.get(self.url + '/leases', headers=self.API_KEY)
+        leases = leases_.json()
+        
+        if len(leases) == 0:
+                return None
+        
+        self.leases = {}
+        if leases_.status_code == 200:
+            for lease in leases:
+                name = lease["lease_id"]
+                del lease["lease_id"]
+                self.leases[name] = lease
+            
+            return self.leases
+        
+        elif leases_.status_code == 401:
+            print("Unauthorized")
+            return None
 
 
         

@@ -5,7 +5,7 @@ import multiprocessing as mp
 import logging
 import sys
 
-logging.basicConfig(level=logging.DEBUG, handlers=[logging.StreamHandler(sys.stdout)])
+#logging.basicConfig(level=logging.DEBUG, handlers=[logging.StreamHandler(sys.stdout)])
 
 
 ##### Variables to share between processes #####
@@ -21,23 +21,23 @@ lock = mp.Lock()
 def streamPrice(app, **s_d):
     #s_d stands for shared_data (but shorter to make it easier to type and shorter to read)
     while True:
-        time.sleep(0.2)
+        time.sleep(0.1)
         #examples for modifying shared data stored in arrays
         securities = app.getSecurities()
         for index, ticker in enumerate(s_d["tickers_name"][:]):
-            s_d["lock"].acquire()
             s_d["tickers_ask"][index] = securities[ticker]["ask"]
             s_d["tickers_bid"][index] = securities[ticker]["bid"]
-            s_d["lock"].release()
+            s_d["tickers_pos"][index] = securities[ticker]["position"]
         
-        time.sleep(0.1)
-        latest_tenders = app.getTenders()
-        if latest_tenders != None:
-            s_d["latest_tenders"].update(latest_tenders)
+        # time.sleep(0.1)
+        # latest_tenders = app.getTenders()
+        # if latest_tenders != None:
+        #     s_d["latest_tenders"].update(latest_tenders)
         
 
         #print(s_d["tickers_bid"][-1])
-
+        if s_d["streaming_started"].value == False:
+            time.sleep(2)
         #always use the .value attribute when accessing shared single value (mp.Value)
         s_d["streaming_started"].value = True
         #number = float(bidask["asks"].iloc[0]["price"])
@@ -51,26 +51,36 @@ def main(app, **s_d):
     while True:
 
         if s_d["streaming_started"].value:
-            time.sleep(0.01)
-            #print(s_d["tickers_bid"][:])
+            time.sleep(0.1)
 
-            if s_d["tickers_bid"][:][s_d["tickers_name"][:].index("RITC")] > 10:
-                pass
-            print(" "*20, end ="\r")
-            print(s_d["tickers_bid"][:], end ="\r")
+            #print(s_d["tickers_ask"][:])
+
+            RITC_bid = s_d["tickers_bid"][s_d["tickers_name"].index("RITC")]
+            RITC_ask = s_d["tickers_ask"][s_d["tickers_name"].index("RITC")]
+
+            BULL_ask = s_d["tickers_ask"][s_d["tickers_name"].index("BULL")]
+            BULL_bid = s_d["tickers_bid"][s_d["tickers_name"].index("BULL")]
+
+            BEAR_ask = s_d["tickers_ask"][s_d["tickers_name"].index("BEAR")]
+            BEAR_bid = s_d["tickers_bid"][s_d["tickers_name"].index("BEAR")]
+
+            USD_ask = s_d["tickers_ask"][s_d["tickers_name"].index("USD")]
+            USD_bid = s_d["tickers_bid"][s_d["tickers_name"].index("USD")]
+
+            if all([pos == 0 for pos in s_d["tickers_pos"][:]]):
+                print((BULL_ask + BEAR_ask)/USD_ask, RITC_bid*0.99)
+                if (BULL_ask + BEAR_ask)/USD_ask < RITC_bid*0.98:
+                    app.postOrder("SELL", "RITC", 100)
+                    app.postOrder("BUY", "BULL", 100)
+                    app.postOrder("BUY", "BEAR", 100)
+                
+                elif (BULL_bid + BEAR_bid)/USD_bid > RITC_ask*1.02:
+                    app.postOrder("BUY", "RITC", 100)
+                    app.postOrder("SELL", "BULL", 100)
+                    app.postOrder("SELL", "BEAR", 100)
             
-            # if len(s_d["latest_tenders"].keys()) != 0:
-            #     all_tender_ids = list(s_d["latest_tenders"].keys())
-            #     all_tender_tickers = [s_d["latest_tenders"][tender_id]["ticker"] for tender_id in all_tender_ids]
-            #     all_tender_tick = [s_d["latest_tenders"][tender_id]["tick"] for tender_id in all_tender_ids]
-            #     all_tender_expiration = [s_d["latest_tenders"][tender_id]["expires"] for tender_id in all_tender_ids]
-            #     all_tender_price = [s_d["latest_tenders"][tender_id]["price"] for tender_id in all_tender_ids]
-            #     all_tender_quantity = [s_d["latest_tenders"][tender_id]["quantity"] for tender_id in all_tender_ids]
 
-            #     if all_tender_price[-1] > 10:
-            #         print(f"executing tender {all_tender_ids[-1]}")
-            #         time.sleep(2)
-            #         app.postTender(all_tender_ids[-1])
+
 
 
 
@@ -92,12 +102,12 @@ if __name__ == "__main__":
 
     tickers_ask = mp.Array('f', len(tickers_name_)) 
 
+    tickers_pos = mp.Array('f', len(tickers_name_))
+
     latest_tenders = {}
     mgr = mp.Manager()
     latest_tenders = mgr.dict()
     latest_tenders.update(latest_tenders)
-
-
 
 
     shared_data = {
@@ -105,6 +115,7 @@ if __name__ == "__main__":
                     'tickers_name': tickers_name,
                     "tickers_bid": tickers_bid,
                     "tickers_ask": tickers_ask,
+                    "tickers_pos": tickers_pos,
                     "latest_tenders": latest_tenders,
                     "lock": lock
                     }
