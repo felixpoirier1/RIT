@@ -1,14 +1,33 @@
 import requests
 import pandas as pd
 from colored import fg, bg, attr
-                                                
+import logging 
+import logging.config
+
+logging.config.dictConfig({
+    'version': 1,
+    'disable_existing_loggers': True,
+})
+
+# Define color codes for each logging level
+LOG_COLORS = {
+    logging.DEBUG: '\033[36m',  # cyan
+    logging.INFO: '\033[32m',  # green
+    logging.WARNING: '\033[33m',  # yellow
+    logging.ERROR: '\033[31m',  # red
+    logging.CRITICAL: '\033[35m',  # magenta
+}
+
+
 
 ############### Trading App class ###############
 
 class TradingApp():
+    logger = logging.getLogger('tradeapp')
+
     def __init__(self, host, API_KEY):
         self.host = str(host)
-        print(f"{fg(2)}Program started with host and API KEY : {attr(1)}{host} {API_KEY}{attr(0)}")
+        self.logger.info(f"Program started with host and API KEY : {str(host)} {str(API_KEY)}")
         
 
         self.host = host
@@ -278,17 +297,17 @@ class TradingApp():
 
         if (order_.status_code == 200):
             if type == "LIMIT":
-                print(f"{fg(2)}{type} {action} order for {ticker} was placed for {quantity} shares at {price}$ per share {attr(0)}")
+                self.logger.info(f"{type} {action} order for {ticker} was placed for {quantity} shares at {price}$ per share")
             else:
-                print(f"{fg(2)}{type} {action} order for {ticker} was placed for {quantity} shares{attr(0)}")
+                self.logger.info(f"{type} {action} order for {ticker} was placed for {quantity} shares")
             return order
 
         elif (order_.status_code == 401):
-            print(f"{fg(1)} Order for {ticker} is unauthorized {attr(0)}")
+            self.logger.info(f"Order for {ticker} is unauthorized")
             return None
         
         elif (order_.status_code == 429):
-            print(f"{fg(3)} Order for {ticker} was declined wait {order['wait']} seconds before trying again {attr(0)}")
+            self.logger.info(f"Order for {ticker} was declined wait {order['wait']} seconds before trying again")
             return order
 
     
@@ -322,11 +341,11 @@ class TradingApp():
         order = order_.json()
 
         if order_.status_code == 200:
-            print(f"Order {order_id} was successfully deleted")
+            self.logger.info(f"Order {order_id} was successfully deleted")
             return order
         
         elif order_.status_code==401:
-            print(f"Order {order_id} is unauthorized")
+            self.logger.info(f"Order {order_id} is unauthorized")
             return None
     
     def getTenders(self):
@@ -353,7 +372,7 @@ class TradingApp():
             return self.tenders
         
         elif tenders_.status_code == 401:
-            print("Unauthorized")
+            self.logger.info("Unauthorized")
             return None
 
     def postTender(self, id : int, accept : bool = True, price : float = None):
@@ -379,10 +398,10 @@ class TradingApp():
             tender = requests.delete(self.url + '/tenders', headers=self.API_KEY, params=tender_head)
         
         if tender.status_code == 200:
-            print(f"Tender {id} was accepted")
+            self.logger.info(f"Tender {id} was accepted")
         
         elif tender.status_code == 401:
-            print(f"Tender {id} is unauthorized")
+            self.logger.info(f"Tender {id} is unauthorized")
 
         return tender.status_code
 
@@ -410,7 +429,7 @@ class TradingApp():
             return self.leases
         
         elif leases_.status_code == 401:
-            print("Unauthorized")
+            self.logger.warning("Unauthorized")
             return None
 
 

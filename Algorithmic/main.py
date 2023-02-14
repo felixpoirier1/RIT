@@ -1,15 +1,40 @@
 #from parent directory import file named tradeapp
-from tradeapp.tradeapp import TradingApp
-
+from tradeapp.tradeapp import TradingApp, LOG_COLORS
 
 import matplotlib.pyplot as plt
 import time
 import multiprocessing as mp
 import logging
-import sys
 
-#logging.basicConfig(level=logging.DEBUG, handlers=[logging.StreamHandler(sys.stdout)])
+# access the logger defined in the TradingApp class
+logger = TradingApp.logger
+logger.setLevel(logging.DEBUG)
 
+# create console handler and set level to debug
+ch = logging.StreamHandler()
+ch.setLevel(logging.DEBUG)
+
+# Define custom formatter with color codes
+class ColoredFormatter(logging.Formatter):
+    def format(self, record):
+        level_color = LOG_COLORS.get(record.levelno, '')
+        reset_color = '\033[0m'
+        message = super().format(record)
+        return level_color + message + reset_color
+
+# create formatter
+formatter = ColoredFormatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+
+# add formatter to ch
+ch.setFormatter(formatter)
+
+# add ch to logger
+logger.addHandler(ch)
+
+# My own trading app class
+class MyTradingApp(TradingApp):
+    def __init__(self, host, API_KEY):
+        super().__init__(host, API_KEY)
 
 ##### Variables to share between processes #####
 streaming_started = mp.Value('b', False)
@@ -110,7 +135,7 @@ def main(app, **s_d):
 
 
 if __name__ == "__main__":
-    app = TradingApp("9999", "0CEN4JP9")
+    app = MyTradingApp("9999", "0CEN4JP9")
 
     # shared data contains the data that will be shared between processes
     # it's important that data that is stored in shared_data and is declared using mp.Value,

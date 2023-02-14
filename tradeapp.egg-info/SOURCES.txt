@@ -1,3 +1,4 @@
+README.md
 tradeapp/__init__.py
 tradeapp/setup.py
 tradeapp/tradeapp.py
