@@ -24,6 +24,7 @@ LOG_COLORS = {
 
 class TradingApp():
     logger = logging.getLogger('tradeapp')
+    class_name = "TradingApp"
 
     def __init__(self, host, API_KEY):
         self.host = str(host)
@@ -37,7 +38,10 @@ class TradingApp():
         self.latestAsk = {}
         self.tickers = []
         self.API_KEY = {'X-API-Key': API_KEY}
-        self.getCaseDetails()
+        try:
+            self.getCaseDetails()
+        except requests.exceptions.ConnectionError:
+            raise(ConnectionError(f"Connection not established Please verifiy that RIT is open and that the host & API key ({self.host} {self.API_KEY['X-API-Key']}) are correct."))
         self.getTraderDetails()
         self.getTradingLimits()
         self.getAssets()
@@ -50,10 +54,12 @@ class TradingApp():
     def getCaseDetails(self):
         """Gets the case details from the API and stores them in the class attributes. (period, tick & total_periods)
         """
+        self.logger.debug(f"Method getCaseDetails called from {self.class_name} class")
         case = requests.get(self.url + '/case', headers=self.API_KEY).json()
         self.period = case["period"]
         self.tick = case["tick"]
         self.total_periods = case["total_periods"]
+        self.logger.debug(f"Case details : period {self.period}, tick {self.tick}, total_periods {self.total_periods}")
 
         return case
 
@@ -61,23 +67,26 @@ class TradingApp():
     def getTraderDetails(self):
         """Gets the trader details from the API and stores them in the class attributes. (trader_id, first_name & last_name)
         """
+        self.logger.debug(f"Method getTraderDetails called from {self.class_name} class")
         trader = requests.get(self.url + '/trader', headers=self.API_KEY).json()
         self.trader_id = trader["trader_id"]
         self.first_name = trader["first_name"]
         self.last_name = trader["last_name"]
+        self.logger.debug(f"Trader details : trader_id {self.trader_id}, first_name {self.first_name}, last_name {self.last_name}")
 
         return trader
 
     def getTradingLimits(self):
         """Gets the trading limits from the API and stores them in the class attributes. (limits)
         """
+        self.logger.debug(f"Method getTradingLimits called from {self.class_name} class")
         limits = requests.get(self.url + '/limits', headers=self.API_KEY).json()
         self.limits = {}
         for asset in limits:
             name = asset["name"]
             del asset["name"]
             self.limits[name] = asset
-        
+        self.logger.debug(f"Trading limits called and created : self.limits which contains {'assets' if len(self.limits) !=0 else 'nothing'}")
         return self.limits
 
     def getNews(self, since : int = 0, limit: int = None, return_latest : bool = True) -> dict:
@@ -97,14 +106,17 @@ class TradingApp():
         dict
             dictionnary of news
         """
+        self.logger.debug(f"Method getNews called from {self.class_name} class with parameters since={since}, limit={limit}, return_latest={return_latest}")
         news_head = {'since':since, 'limit':limit}
         self.news = requests.get(self.url + '/news', headers=self.API_KEY, params=news_head).json()
-        
+
+        self.logger.debug(f"News called and created : self.news which contains {'news' if len(self.news) !=0 else 'nothing'}")
+
         if return_latest:
             return self.news[-1]
         else:
             return self.news
-
+        
     def getAssets(self, ticker : str = None) -> dict:
         """Gets the assets from the API and stores them in the class attributes. (assets)
 
@@ -118,12 +130,15 @@ class TradingApp():
         dict
             dictionnary of assets
         """
+        self.logger.debug(f"Method getAssets called from {self.class_name} class with parameters ticker={ticker}")
         if ticker == None:
             self.assets = requests.get(self.url + '/assets', headers=self.API_KEY).json()
+            self.logger.debug(f"Assets called and created : self.assets which contains {'assets' if len(self.assets) !=0 else 'nothing'}")
             return self.assets
         else:
             asset_head = {'ticker': ticker}
             asset = requests.get(self.url + '/asset', headers=self.API_KEY, params=asset_head).json()
+            self.logger.debug(f"Asset called and created : self.asset which contains {'asset' if len(asset) !=0 else 'nothing'}")
             return asset
 
         
@@ -139,11 +154,12 @@ class TradingApp():
         limit : int, optional
             _description_, by default None
         """
+        self.logger.debug(f"Method getAssets called from {self.class_name} class with parameters ticker={ticker}, period={period}, limit={limit}")
         if ((period == None) and (limit == None)):
             assets_history_head = {'ticker': ticker}
             assetshistory = requests.get(self.url + '/assets/history', headers=self.API_KEY, params=assets_history_head).json()
 
-
+        self.logger.debug(f"Assets history called and created : self.assetshistory which contains {'assets history' if len(assetshistory) !=0 else 'nothing'}")
         # JC programme la methode comme tu veux, tu es le seul qui en aura de besoin ("NG")
     
     def getSecurities(self, ticker : str = None):
@@ -159,6 +175,7 @@ class TradingApp():
         dict
             dictionary of all securities with their name as key and their data as value
         """
+        self.logger.debug(f"Method getSecurities called from {self.class_name} class with parameter ticker={ticker}")
         if ticker == None :
             securities = requests.get(self.url + '/securities', headers=self.API_KEY).json()
             self.tickers_name = []
@@ -168,12 +185,14 @@ class TradingApp():
                 del security["ticker"]
                 self.tickers_name += [name]
                 self.tickers_data[name] = security
-           
+
+            self.logger.debug(f"Securities called and created : self.tickers_name which contains {'tickers' if len(self.tickers_name) !=0 else 'nothing'} and self.tickers_data which contains {'tickers data' if len(self.tickers_data) !=0 else 'nothing'}")
             return self.tickers_data
         
         else:
             security_head = {'ticker': ticker}
             security = requests.get(self.url + '/securities', headers=self.API_KEY, params=security_head).json()
+            self.logger.debug(f"Security called and created : self.security which contains {'security' if len(security) !=0 else 'nothing'}")
             return security
     
     def getSecuritiesBook(self, ticker: str, limit : int = None):
@@ -191,10 +210,11 @@ class TradingApp():
         dict        
             dictionary with two keys "bids" and "asks" which are dataframes of bids and asks
         """
+        self.logger.debug(f"Method getSecuritiesBook called from {self.class_name} class with parameters ticker={ticker}, limit={limit}")
         assert ticker in self.tickers_name
         security_book_head = {'ticker': ticker, 'limit': limit}
         securitybook = requests.get(self.url + '/securities/book', headers=self.API_KEY, params=security_book_head).json()
-
+        self.logger.debug(f"Security book called and created : self.securitybook which contains {'security book' if len(securitybook) !=0 else 'nothing'}")
         return {
             "bids" : 
                 pd.DataFrame(securitybook["bids"]).set_index("order_id").sort_values("price", ascending=False), 
@@ -214,12 +234,14 @@ class TradingApp():
         limit : int, optional
             Amount of trades to record starting from current tick, by default equal to tick
         """
+        self.logger.debug(f"Method getSecuritiesHistory called from {self.class_name} class with parameters ticker={ticker}, period={period}, limit={limit}")
         assert ticker in self.tickers_name
         security_history_head = {'ticker': ticker, 'period' : period, 'limit': limit}
         securityhistory = requests.get(self.url + '/securities/history', headers=self.API_KEY, params=security_history_head).json()
         
         self.securities_history[ticker] = pd.DataFrame(securityhistory)
-
+        
+        self.logger.debug(f"Security history called and created : self.securities_history which contains {'securities history' if len(self.securities_history[ticker]) !=0 else 'nothing'}")
         return self.securities_history[ticker]
 
     def getSecuritiesTas(self, ticker : str, after : int = None, period : int = None, limit : int = None):
@@ -236,13 +258,14 @@ class TradingApp():
         limit : int, optional
             Amount of trades to record starting from current tick, by default equal to tick
         """
+        self.logger.debug(f"Method getSecuritiesTas called from {self.class_name} class with parameters ticker={ticker}, after={after}, period={period}, limit={limit}")
         assert ticker in self.tickers_name
         security_tas_head = {'ticker': ticker, 'after': after, 'period': after, 'limit': after}
         securitytas = requests.get(self.url + '/securities/tas', headers=self.API_KEY, params=security_tas_head).json()
         
         self.securities_tas[ticker] = pd.DataFrame(securitytas)
         self.securities_tas[ticker].set_index("id", inplace=True)
-    
+        self.logger.debug(f"Security tas called and created : self.securities_tas which contains {'securities tas' if len(self.securities_tas[ticker]) !=0 else 'nothing'}")
 
     def getOrders(self, status : str = None):
         """Returns a list of all orders
@@ -257,9 +280,10 @@ class TradingApp():
         list
             list of all orders
         """
+        self.logger.debug(f"Method getOrders called from {self.class_name} class with parameters status={status}")
         orders_head = {'status': status}
         self.orders = requests.get(self.url + '/orders', headers=self.API_KEY, params=orders_head).json()
-        
+        self.logger.debug(f"Orders called and created : self.orders which contains {'orders' if len(self.orders) !=0 else 'nothing'}")
         return self.orders
 
     def postOrder(self, action : str, ticker : str, quantity : int, price : float = None, type : str = "MARKET", ignore_limit : bool = False):
@@ -280,6 +304,7 @@ class TradingApp():
         ignore_limit : bool, optional
             If True, no error will be given even if the quantity is greater than the net limit, by default False
         """
+        self.logger.debug(f"Method postOrder called from {self.class_name} class with parameters action={action}, ticker={ticker}, quantity={quantity}, price={price}, type={type}, ignore_limit={ignore_limit}")
         assert action in ["BUY", "SELL"]
         assert type in ["LIMIT", "MARKET"]
         assert ticker in self.tickers_name
@@ -294,7 +319,7 @@ class TradingApp():
         order_head = {'ticker': ticker, 'quantity': quantity, 'type': type, 'action': action, 'price': price}
         order_ = requests.post(self.url + '/orders', headers=self.API_KEY, params=order_head)
         order = order_.json()
-
+        self.logger.debug(f"Order called and created")
         if (order_.status_code == 200):
             if type == "LIMIT":
                 self.logger.info(f"{type} {action} order for {ticker} was placed for {quantity} shares at {price}$ per share")
@@ -303,11 +328,11 @@ class TradingApp():
             return order
 
         elif (order_.status_code == 401):
-            self.logger.info(f"Order for {ticker} is unauthorized")
+            self.logger.warning(f"Order for {ticker} is unauthorized")
             return None
         
         elif (order_.status_code == 429):
-            self.logger.info(f"Order for {ticker} was declined wait {order['wait']} seconds before trying again")
+            self.logger.warning(f"Order for {ticker} was declined wait {order['wait']} seconds before trying again")
             return order
 
     
@@ -324,8 +349,10 @@ class TradingApp():
         dict
             The order with the given id
         """
+        self.logger.debug(f"Method getOrder called from {self.class_name} class with parameters order_id={order_id}")
         order_head = {'id': order_id} 
         order = requests.get(self.url + '/orders', headers=self.API_KEY, params=order_head).json()
+        self.logger.debug(f"Orders retrieved and returns self.orders which contains {'orders' if len(self.orders) !=0 else 'nothing'}")
         return order
 
     def deleteOrder(self, order_id : str):
@@ -336,16 +363,17 @@ class TradingApp():
         order_id : str
             The id of the order
         """
+        self.logger.debug(f"Method deleteOrder called from {self.class_name} class with parameters order_id={order_id}")
         order_head = {'id': order_id} 
         order_ = requests.delete(self.url + '/orders', headers=self.API_KEY, params=order_head)
         order = order_.json()
 
         if order_.status_code == 200:
-            self.logger.info(f"Order {order_id} was successfully deleted")
+            self.logger.warning(f"Order {order_id} was successfully deleted")
             return order
         
         elif order_.status_code==401:
-            self.logger.info(f"Order {order_id} is unauthorized")
+            self.logger.warning(f"Order {order_id} is unauthorized")
             return None
     
     def getTenders(self):
@@ -356,6 +384,7 @@ class TradingApp():
         list
             list of all tenders
         """
+        self.logger.debug(f"Method getTenders called from {self.class_name} class")
         tenders_ = requests.get(self.url + '/tenders', headers=self.API_KEY)
         tenders = tenders_.json()
         
@@ -369,10 +398,11 @@ class TradingApp():
                 del tender["tender_id"]
                 self.tenders[name] = tender
             
+            self.logger.debug(f"Tenders called and created : self.tenders which contains {'tenders' if len(self.tenders) !=0 else 'nothing'}")
             return self.tenders
         
         elif tenders_.status_code == 401:
-            self.logger.info("Unauthorized")
+            self.logger.warning("Unauthorized")
             return None
 
     def postTender(self, id : int, accept : bool = True, price : float = None):
@@ -387,6 +417,7 @@ class TradingApp():
         price : float, optional
             The price per share to accept the tender at, by default None
         """
+        self.logger.debug(f"Method postTender called from {self.class_name} class with parameters id={id}, accept={accept}, price={price}")
         if accept:
             tender_head = {'id': id}
             print(tender_head)
@@ -401,7 +432,8 @@ class TradingApp():
             self.logger.info(f"Tender {id} was accepted")
         
         elif tender.status_code == 401:
-            self.logger.info(f"Tender {id} is unauthorized")
+            self.logger.warning(f"Tender {id} is unauthorized")
+
 
         return tender.status_code
 
@@ -413,6 +445,7 @@ class TradingApp():
         list
             list of all leases
         """
+        self.logger.debug(f"Method getLeases called from {self.class_name} class")
         leases_ = requests.get(self.url + '/leases', headers=self.API_KEY)
         leases = leases_.json()
         
@@ -425,7 +458,7 @@ class TradingApp():
                 name = lease["lease_id"]
                 del lease["lease_id"]
                 self.leases[name] = lease
-            
+            self.logger.debug(f"Leases called and created : self.leases which contains {'leases' if len(self.leases) !=0 else 'nothing'}")
             return self.leases
         
         elif leases_.status_code == 401:

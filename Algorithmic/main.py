@@ -36,10 +36,8 @@ class MyTradingApp(TradingApp):
     def __init__(self, host, API_KEY):
         super().__init__(host, API_KEY)
 
-##### Variables to share between processes #####
+##### General variables to share between processes #####
 streaming_started = mp.Value('b', False)
-
-# create array of n elements of type string
 
 lock = mp.Lock()
 
