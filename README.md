@@ -46,7 +46,7 @@ class MyTradingApp(TradingApp):
         # return whatever you want 
         return None
 ```
-Using this method you will have access to all of the functionality inside of Trading App with your own touch
+Using this method you will have access to all of the functionality inside of TradingApp with your own touch
 
 You can then call your own version of TradeApp called MyTradingApp using
 
@@ -61,7 +61,6 @@ $ py main.py
 ```
 
 You should see a green message 
-```python
-#main.py
+```powershell
 Program started with host and API KEY : XXXX YYYYYYYY
 ```
