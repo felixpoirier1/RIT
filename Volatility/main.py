@@ -1,4 +1,4 @@
-from tradeapp import TradingApp
+from tradeapp.tradeapp import TradingApp
 import matplotlib.pyplot as plt
 import time
 import multiprocessing as mp
