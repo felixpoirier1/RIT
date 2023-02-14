@@ -2,7 +2,6 @@ import requests
 import pandas as pd
 from colored import fg, bg, attr
 import time
-import multiprocessing as mp
 
                                                 
 
