@@ -1,4 +1,4 @@
-#from parent directory import file named tradeapp
+#import tradeapp module 
 from tradeapp.tradeapp import TradingApp, LOG_COLORS
 
 import matplotlib.pyplot as plt
@@ -12,7 +12,7 @@ logger.setLevel(logging.DEBUG)
 
 # create console handler and set level to debug
 ch = logging.StreamHandler()
-ch.setLevel(logging.DEBUG)
+ch.setLevel(logging.INFO)
 
 # Define custom formatter with color codes
 class ColoredFormatter(logging.Formatter):
@@ -33,9 +33,23 @@ logger.addHandler(ch)
 
 # My own trading app class
 class MyTradingApp(TradingApp):
+    class_name = "MyTradingApp"
     def __init__(self, host, API_KEY):
         super().__init__(host, API_KEY)
+        self.starttime = time.time() - self.tick
 
+    def currentTick(self):
+        self.logger.debug(f"Method currentTick called from {self.class_name} class")
+        now = time.time()
+        self.ticks_per_period = 300
+        if now - self.starttime < self.ticks_per_period:
+            self.logger.debug("Total periods reached, returning None")
+            return int(round(now - self.starttime, 0))
+        else:
+            self.getCaseDetails()
+            self.starttime = time.time() - self.tick
+            return self.currentTick()
+        
 ##### General variables to share between processes #####
 streaming_started = mp.Value('b', False)
 
@@ -44,7 +58,7 @@ lock = mp.Lock()
 
 ############## Streaming function #############
 
-def streamPrice(app, **s_d):
+def streamPrice(app : TradingApp, **s_d):
     #s_d stands for shared_data (but shorter to make it easier to type and shorter to read)
     while True:
         time.sleep(0.1)
@@ -70,7 +84,7 @@ def streamPrice(app, **s_d):
 
 ############### Main function ################
 
-def main(app, **s_d):
+def main(app : TradingApp, **s_d):
     #s_d stands for shared_data (but shorter to make it easier to type and shorter to read)
     #while True is a loop that will run forever (CTRL+C to stop it)
     while True:
@@ -91,20 +105,21 @@ def main(app, **s_d):
 
             USD_ask = s_d["tickers_ask"][s_d["tickers_name"].index("USD")]
             USD_bid = s_d["tickers_bid"][s_d["tickers_name"].index("USD")]
-            
+            print(app.currentTick())
             ARB_BOUND = 0.01
-            if all([pos == 0 for pos in s_d["tickers_pos"][:]]):
+            if all([pos == 0 for pos in s_d["tickers_pos"][:]]) and s_d["arb_open"].value == False:
                 print((BULL_ask + BEAR_ask)/USD_ask, RITC_bid)
                 if (BULL_ask + BEAR_ask)/USD_ask < RITC_bid*(1-ARB_BOUND):
                     # take position
                     app.postOrder("SELL", "RITC", 100)
                     app.postOrder("BUY", "BULL", 100)
                     app.postOrder("BUY", "BEAR", 100)
-                
+
+                    s_d["arb_open"] = True
                     # cover position with limit
-                    app.postOrder("BUY", "RITC", 100, price = (BULL_ask + BEAR_ask)/USD_ask, type="LIMIT")
-                    app.postOrder("SELL", "BULL", 100, price = RITC_bid*USD_ask - BEAR_ask, type="LIMIT")
-                    app.postOrder("SELL", "BEAR", 100, price = RITC_bid*USD_ask - BULL_ask, type="LIMIT")
+                    # app.postOrder("BUY", "RITC", 100, price = (BULL_ask + BEAR_ask)/USD_ask, type="LIMIT")
+                    # app.postOrder("SELL", "BULL", 100, price = RITC_bid*USD_ask - BEAR_ask, type="LIMIT")
+                    # app.postOrder("SELL", "BEAR", 100, price = RITC_bid*USD_ask - BULL_ask, type="LIMIT")
 
                 elif (BULL_bid + BEAR_bid)/USD_bid > RITC_ask*(1+ARB_BOUND):
                     # take position
@@ -112,19 +127,23 @@ def main(app, **s_d):
                     app.postOrder("SELL", "BULL", 100)
                     app.postOrder("SELL", "BEAR", 100)
                     
+                    s_d["arb_open"] = True
                     # cover position with limit
-                    app.postOrder("SELL", "RITC", 100, price = (BULL_bid + BEAR_bid)/USD_bid, type="LIMIT")
-                    app.postOrder("BUY", "BULL", 100, price = RITC_ask*USD_bid - BEAR_bid, type="LIMIT")
-                    app.postOrder("BUY", "BEAR", 100, price = RITC_ask*USD_bid - BULL_bid, type="LIMIT")
+                    # app.postOrder("SELL", "RITC", 100, price = (BULL_bid + BEAR_bid)/USD_bid, type="LIMIT")
+                    # app.postOrder("BUY", "BULL", 100, price = RITC_ask*USD_bid - BEAR_bid, type="LIMIT")
+                    # app.postOrder("BUY", "BEAR", 100, price = RITC_ask*USD_bid - BULL_bid, type="LIMIT")
 
 
                 time.sleep(0.2)
             
-            # elif any([pos != 0 for pos in s_d["tickers_pos"][:]]):
-            #     if ((BULL_ask + BEAR_ask)/USD_ask > RITC_bid*(1-ARB_BOUND)) or ((BULL_bid + BEAR_bid)/USD_bid < RITC_ask*(1+ARB_BOUND)):
-            #         for index, pos in enumerate(s_d["tickers_pos"][:]):
-            #             if pos != 0:
-            #                 app.postOrder("SELL" if pos > 0 else "BUY", s_d["tickers_name"][index], abs(pos))
+            elif any([pos != 0 for pos in s_d["tickers_pos"][:]]) and s_d["arb_open"] == True:
+                print("..")
+                if ((BULL_ask + BEAR_ask)/USD_ask > RITC_bid) or ((BULL_bid + BEAR_bid)/USD_bid < RITC_ask):
+                    for index, pos in enumerate(s_d["tickers_pos"][:]):
+                        if pos != 0:
+                            app.postOrder("SELL" if pos > 0 else "BUY", s_d["tickers_name"][index], abs(pos))
+                    
+                    s_d["arb_open"] = False
             
 
 
@@ -160,6 +179,8 @@ if __name__ == "__main__":
     latest_tenders = mgr.dict()
     latest_tenders.update(latest_tenders)
 
+    arb_open = mp.Value('b', False)
+
     shared_data = {
                     'streaming_started': streaming_started,
                     'tickers_name': tickers_name,
@@ -168,6 +189,7 @@ if __name__ == "__main__":
                     "tickers_pos": tickers_pos,
                     "tickers_fee": tickers_fee,
                     "latest_tenders": latest_tenders,
+                    "arb_open": arb_open,
                     "lock": lock
                     }
 
