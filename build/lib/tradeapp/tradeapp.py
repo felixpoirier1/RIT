@@ -3,6 +3,7 @@ import pandas as pd
 from colored import fg, bg, attr
 import logging 
 import logging.config
+import time
 
 logging.config.dictConfig({
     'version': 1,
@@ -50,6 +51,20 @@ class TradingApp():
         self.securities_book = {}
         self.securities_history = {}
         self.securities_tas = {}
+        self.starttime = time.time() - self.tick
+
+    def currentTick(self):
+        self.logger.debug(f"Method currentTick called from {self.class_name} class")
+        now = time.time()
+        self.ticks_per_period = 300
+        if now - self.starttime < self.ticks_per_period:
+            self.logger.debug("Total periods reached, returning None")
+            return int(round(now - self.starttime, 0))
+        else:
+            self.getCaseDetails()
+            self.starttime = time.time() - self.tick
+            return self.currentTick()
+        
     
     def getCaseDetails(self):
         """Gets the case details from the API and stores them in the class attributes. (period, tick & total_periods)

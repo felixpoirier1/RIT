@@ -12,7 +12,7 @@ logger.setLevel(logging.DEBUG)
 
 # create console handler and set level to debug
 ch = logging.StreamHandler()
-ch.setLevel(logging.INFO)
+ch.setLevel(logging.DEBUG)
 
 # Define custom formatter with color codes
 class ColoredFormatter(logging.Formatter):
@@ -36,19 +36,6 @@ class MyTradingApp(TradingApp):
     class_name = "MyTradingApp"
     def __init__(self, host, API_KEY):
         super().__init__(host, API_KEY)
-        self.starttime = time.time() - self.tick
-
-    def currentTick(self):
-        self.logger.debug(f"Method currentTick called from {self.class_name} class")
-        now = time.time()
-        self.ticks_per_period = 300
-        if now - self.starttime < self.ticks_per_period:
-            self.logger.debug("Total periods reached, returning None")
-            return int(round(now - self.starttime, 0))
-        else:
-            self.getCaseDetails()
-            self.starttime = time.time() - self.tick
-            return self.currentTick()
         
 ##### General variables to share between processes #####
 streaming_started = mp.Value('b', False)
