@@ -53,7 +53,14 @@ class TradingApp():
         self.securities_tas = {}
         self.starttime = time.time() - self.tick
 
-    def currentTick(self):
+    def currentTick(self) -> int:
+        """Returns the current tick of the trading period. If the period is over, it will call the getCaseDetails method to update the period, tick & total_periods attributes and then call itself again to return the current tick.
+
+        Returns
+        -------
+        int
+            The current tick of the trading period.
+        """
         self.logger.debug(f"Method currentTick called from {self.class_name} class")
         now = time.time()
         self.ticks_per_period = 300
@@ -434,9 +441,7 @@ class TradingApp():
         """
         self.logger.debug(f"Method postTender called from {self.class_name} class with parameters id={id}, accept={accept}, price={price}")
         if accept:
-            tender_head = {'id': id}
-            print(tender_head)
-            tender = requests.post(self.url + '/tenders', headers=self.API_KEY, params=tender_head)
+            tender = requests.post(self.url + '/tenders' + f'/{id}', headers=self.API_KEY)
             print(tender.json())
 
         else:

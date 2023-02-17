@@ -441,10 +441,7 @@ class TradingApp():
         """
         self.logger.debug(f"Method postTender called from {self.class_name} class with parameters id={id}, accept={accept}, price={price}")
         if accept:
-            tender_head = {'id': id}
-            print(tender_head)
-            tender = requests.post(self.url + '/tenders', headers=self.API_KEY, params=tender_head)
-            print(tender.json())
+            tender = requests.post(self.url + '/tenders' + f'/{id}', headers=self.API_KEY)
 
         else:
             tender_head = {'id': id}

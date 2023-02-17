@@ -12,7 +12,7 @@ logger.setLevel(logging.DEBUG)
 
 # create console handler and set level to debug
 ch = logging.StreamHandler()
-ch.setLevel(logging.DEBUG)
+ch.setLevel(logging.INFO)
 
 # Define custom formatter with color codes
 class ColoredFormatter(logging.Formatter):
@@ -56,10 +56,10 @@ def streamPrice(app : TradingApp, **s_d):
             s_d["tickers_bid"][index] = securities[ticker]["bid"]
             s_d["tickers_pos"][index] = securities[ticker]["position"]
         
-        # time.sleep(0.1)
-        # latest_tenders = app.getTenders()
-        # if latest_tenders != None:
-        #     s_d["latest_tenders"].update(latest_tenders)
+        time.sleep(0.1)
+        latest_tenders = app.getTenders()
+        if latest_tenders != None:
+            s_d["latest_tenders"].update(latest_tenders)
         
 
         #print(s_d["tickers_bid"][-1])
@@ -93,45 +93,53 @@ def main(app : TradingApp, **s_d):
             USD_ask = s_d["tickers_ask"][s_d["tickers_name"].index("USD")]
             USD_bid = s_d["tickers_bid"][s_d["tickers_name"].index("USD")]
             print(app.currentTick())
-            ARB_BOUND = 0.01
-            if all([pos == 0 for pos in s_d["tickers_pos"][:]]) and s_d["arb_open"].value == False:
-                print((BULL_ask + BEAR_ask)/USD_ask, RITC_bid)
-                if (BULL_ask + BEAR_ask)/USD_ask < RITC_bid*(1-ARB_BOUND):
-                    # take position
-                    app.postOrder("SELL", "RITC", 100)
-                    app.postOrder("BUY", "BULL", 100)
-                    app.postOrder("BUY", "BEAR", 100)
+            # ARB_BOUND = 0.01
+            # if all([pos == 0 for pos in s_d["tickers_pos"][:]]) and s_d["arb_open"].value == False:
+            #     print((BULL_ask + BEAR_ask)/USD_ask, RITC_bid)
+            #     if (BULL_ask + BEAR_ask)/USD_ask < RITC_bid*(1-ARB_BOUND):
+            #         # take position
+            #         app.postOrder("SELL", "RITC", 100)
+            #         app.postOrder("BUY", "BULL", 100)
+            #         app.postOrder("BUY", "BEAR", 100)
 
-                    s_d["arb_open"] = True
-                    # cover position with limit
-                    # app.postOrder("BUY", "RITC", 100, price = (BULL_ask + BEAR_ask)/USD_ask, type="LIMIT")
-                    # app.postOrder("SELL", "BULL", 100, price = RITC_bid*USD_ask - BEAR_ask, type="LIMIT")
-                    # app.postOrder("SELL", "BEAR", 100, price = RITC_bid*USD_ask - BULL_ask, type="LIMIT")
+            #         s_d["arb_open"] = True
+            #         # cover position with limit
+            #         # app.postOrder("BUY", "RITC", 100, price = (BULL_ask + BEAR_ask)/USD_ask, type="LIMIT")
+            #         # app.postOrder("SELL", "BULL", 100, price = RITC_bid*USD_ask - BEAR_ask, type="LIMIT")
+            #         # app.postOrder("SELL", "BEAR", 100, price = RITC_bid*USD_ask - BULL_ask, type="LIMIT")
 
-                elif (BULL_bid + BEAR_bid)/USD_bid > RITC_ask*(1+ARB_BOUND):
-                    # take position
-                    app.postOrder("BUY", "RITC", 100)
-                    app.postOrder("SELL", "BULL", 100)
-                    app.postOrder("SELL", "BEAR", 100)
+            #     elif (BULL_bid + BEAR_bid)/USD_bid > RITC_ask*(1+ARB_BOUND):
+            #         # take position
+            #         app.postOrder("BUY", "RITC", 100)
+            #         app.postOrder("SELL", "BULL", 100)
+            #         app.postOrder("SELL", "BEAR", 100)
                     
-                    s_d["arb_open"] = True
-                    # cover position with limit
-                    # app.postOrder("SELL", "RITC", 100, price = (BULL_bid + BEAR_bid)/USD_bid, type="LIMIT")
-                    # app.postOrder("BUY", "BULL", 100, price = RITC_ask*USD_bid - BEAR_bid, type="LIMIT")
-                    # app.postOrder("BUY", "BEAR", 100, price = RITC_ask*USD_bid - BULL_bid, type="LIMIT")
+            #         s_d["arb_open"] = True
+            #         # cover position with limit
+            #         # app.postOrder("SELL", "RITC", 100, price = (BULL_bid + BEAR_bid)/USD_bid, type="LIMIT")
+            #         # app.postOrder("BUY", "BULL", 100, price = RITC_ask*USD_bid - BEAR_bid, type="LIMIT")
+            #         # app.postOrder("BUY", "BEAR", 100, price = RITC_ask*USD_bid - BULL_bid, type="LIMIT")
 
 
-                time.sleep(0.2)
+            #     time.sleep(0.2)
             
-            elif any([pos != 0 for pos in s_d["tickers_pos"][:]]) and s_d["arb_open"] == True:
-                print("..")
-                if ((BULL_ask + BEAR_ask)/USD_ask > RITC_bid) or ((BULL_bid + BEAR_bid)/USD_bid < RITC_ask):
-                    for index, pos in enumerate(s_d["tickers_pos"][:]):
-                        if pos != 0:
-                            app.postOrder("SELL" if pos > 0 else "BUY", s_d["tickers_name"][index], abs(pos))
+            # elif any([pos != 0 for pos in s_d["tickers_pos"][:]]) and s_d["arb_open"] == True:
+            #     print("..")
+            #     if ((BULL_ask + BEAR_ask)/USD_ask > RITC_bid) or ((BULL_bid + BEAR_bid)/USD_bid < RITC_ask):
+            #         for index, pos in enumerate(s_d["tickers_pos"][:]):
+            #             if pos != 0:
+            #                 app.postOrder("SELL" if pos > 0 else "BUY", s_d["tickers_name"][index], abs(pos))
                     
-                    s_d["arb_open"] = False
-            
+            #         s_d["arb_open"] = False
+            latest_tenders = dict(s_d["latest_tenders"])
+            if latest_tenders != {}:
+                response = app.postTender(list(latest_tenders.keys())[0])
+                s_d["latest_tenders"].popitem()
+                if response == 200:
+
+
+                    
+                
 
 
 
