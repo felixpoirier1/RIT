@@ -420,4 +420,5 @@ class TradingApp():
         
 
 if __name__ == "__main__":
-    print("Hello World")
+    app = TradingApp("9999", "EG6SMVYC")
+    TradingApp.postOrder(app,"SELL","RTM2C48",10)
