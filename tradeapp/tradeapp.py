@@ -74,7 +74,7 @@ class TradingApp():
                 time.sleep(1)
                 return self.currentTick()
         
-    def getAbsoluteTick(self) -> int:
+    def currentAbsoluteTick(self) -> int:
         """Returns the current tick of the all trading periods. If the period is over, it will call the getCaseDetails method to update the period, tick & total_periods attributes and then call itself again to return the current tick.
 
         Returns
