@@ -87,8 +87,13 @@ class TradingApp():
         return self.period * self.ticks_per_period + tick
 
 
-    def getCaseDetails(self):
+    def getCaseDetails(self) -> dict:
         """Gets the case details from the API and stores them in the class attributes. (period, tick & total_periods)
+
+        Returns
+        -------
+        dict
+            The case details.
         """
         self.logger.debug(f"Method getCaseDetails called from {self.class_name} class")
         case = requests.get(self.url + '/case', headers=self.API_KEY).json()
@@ -105,8 +110,13 @@ class TradingApp():
         return case
 
         
-    def getTraderDetails(self):
+    def getTraderDetails(self) -> dict:
         """Gets the trader details from the API and stores them in the class attributes. (trader_id, first_name & last_name)
+
+        Returns
+        -------
+        dict
+            The trader details.
         """
         self.logger.debug(f"Method getTraderDetails called from {self.class_name} class")
         trader = requests.get(self.url + '/trader', headers=self.API_KEY).json()
