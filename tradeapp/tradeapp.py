@@ -51,7 +51,6 @@ class TradingApp():
         self.securities_book = {}
         self.securities_history = {}
         self.securities_tas = {}
-        self.starttime = time.time() - self.tick
 
     def currentTick(self) -> int:
         """Returns the current tick of the trading period. If the period is over, it will call the getCaseDetails method to update the period, tick & total_periods attributes and then call itself again to return the current tick.
@@ -63,14 +62,17 @@ class TradingApp():
         """
         self.logger.debug(f"Method currentTick called from {self.class_name} class")
         now = time.time()
-        self.ticks_per_period = 300
+
         if now - self.starttime < self.ticks_per_period:
             self.logger.debug("Total periods reached, returning None")
             return int(round(now - self.starttime, 0))
         else:
             self.getCaseDetails()
-            self.starttime = time.time() - self.tick
-            return self.currentTick()
+            if self.tick != None:
+                self.starttime = time.time() - self.tick
+            else:
+                time.sleep(1)
+                return self.currentTick()
         
     
     def getCaseDetails(self):
@@ -80,7 +82,12 @@ class TradingApp():
         case = requests.get(self.url + '/case', headers=self.API_KEY).json()
         self.period = case["period"]
         self.tick = case["tick"]
+        if self.tick == 0:
+            self.tick = None
+        else:
+            self.starttime = time.time() - self.tick
         self.total_periods = case["total_periods"]
+        self.ticks_per_period = case["ticks_per_period"]
         self.logger.debug(f"Case details : period {self.period}, tick {self.tick}, total_periods {self.total_periods}")
 
         return case
@@ -356,6 +363,8 @@ class TradingApp():
         elif (order_.status_code == 429):
             self.logger.warning(f"Order for {ticker} was declined wait {order['wait']} seconds before trying again")
             return order
+        else:
+            print(order)
 
     
     def getOrder(self, order_id : str):

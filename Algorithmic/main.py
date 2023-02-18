@@ -1,7 +1,8 @@
 #import tradeapp module 
 from tradeapp.tradeapp import TradingApp, LOG_COLORS
-
+from utils import enoughLiquidty, optimalPrice
 import matplotlib.pyplot as plt
+import numpy as np
 import time
 import multiprocessing as mp
 import logging
@@ -60,11 +61,14 @@ def streamPrice(app : TradingApp, **s_d):
         latest_tenders = app.getTenders()
         if latest_tenders != None:
             s_d["latest_tenders"].update(latest_tenders)
+        else:
+            s_d["latest_tenders"].clear()
+
         
 
         #print(s_d["tickers_bid"][-1])
         if s_d["streaming_started"].value == False:
-            time.sleep(2)
+            time.sleep(1)
         #always use the .value attribute when accessing shared single value (mp.Value)
         s_d["streaming_started"].value = True
 
@@ -92,7 +96,7 @@ def main(app : TradingApp, **s_d):
 
             USD_ask = s_d["tickers_ask"][s_d["tickers_name"].index("USD")]
             USD_bid = s_d["tickers_bid"][s_d["tickers_name"].index("USD")]
-            print(app.currentTick())
+            tick = app.currentTick()
             # ARB_BOUND = 0.01
             # if all([pos == 0 for pos in s_d["tickers_pos"][:]]) and s_d["arb_open"].value == False:
             #     print((BULL_ask + BEAR_ask)/USD_ask, RITC_bid)
@@ -131,11 +135,52 @@ def main(app : TradingApp, **s_d):
             #                 app.postOrder("SELL" if pos > 0 else "BUY", s_d["tickers_name"][index], abs(pos))
                     
             #         s_d["arb_open"] = False
-            latest_tenders = dict(s_d["latest_tenders"])
-            if latest_tenders != {}:
-                response = app.postTender(list(latest_tenders.keys())[0])
-                s_d["latest_tenders"].popitem()
-                if response == 200:
+            print(app.currentTick())
+            # latest_tenders = dict(s_d["latest_tenders"])
+            # if latest_tenders != {} and s_d["unwinding"].value == False:
+            #     id = list(latest_tenders.keys())[0]
+            #     ticker = latest_tenders[id]["ticker"]
+            #     #direction can take the values "BUY" or "SELL"
+            #     direction = latest_tenders[id]["action"]
+            #     price = latest_tenders[id]["price"]
+            #     quantity = latest_tenders[id]["quantity"]
+            #     seconds_till_expiration =  latest_tenders[id]["expires"] - tick
+
+            #     if direction == "BUY":
+            #         direction_to_unwind = "SELL"
+            #     else:
+            #         direction_to_unwind = "BUY"
+            #     #verify that the price is appropriate and that there is a market to sell to or buy from
+            #     bidask = app.getSecuritiesBook(ticker)
+                
+            #     liquidty_cond = enoughLiquidty(bidask, 0.5, price, quantity, direction_to_unwind)
+            #     #optimalPrice(bidask, quantity, direction_to_unwind)
+            #     #send the order
+            #     if liquidty_cond:
+            #         id = list(latest_tenders.keys())[0]
+            #         response = app.postTender(id, "ACCEPT")
+            #         print(response)
+
+            #         # verifiy if the order was accepted
+            #         if response == 200:
+            #             # if it was accepted, then we need to unwind the position
+            #             total_order_qty = np.ceil(quantity/10000)
+            #             if direction_to_unwind == "SELL":
+            #                 tiers = [1 for i in range(1, int(total_order_qty))]
+            #             else:
+            #                 tiers = [1 for i in range(1, int(total_order_qty))]
+            #             remaining_qty = quantity
+            #             while remaining_qty != 0:
+
+            #                 quantity = min(remaining_qty, 10000)
+            #                 price = (RITC_bid+RITC_ask)/2
+            #                 price = price - 1 if direction_to_unwind == "SELL" else price + 1
+
+            #                 g = app.postOrder(direction_to_unwind, ticker, quantity, price, type="LIMIT")
+            #                 remaining_qty -= quantity  
+
+                    
+
 
 
                     
@@ -158,6 +203,7 @@ if __name__ == "__main__":
     # retrieves the list of tickers and stores it in a shared lis
     
     securities_info = app.getSecurities()
+    print(app.getCaseDetails())
     tickers_name_ = list(securities_info.keys())
     tickers_name = [mp.Array('c', 1) for i in range(len(tickers_name_))]
     tickers_name[:] = list(securities_info.keys())
@@ -175,6 +221,7 @@ if __name__ == "__main__":
     latest_tenders.update(latest_tenders)
 
     arb_open = mp.Value('b', False)
+    unwinding = mp.Value('b', False)
 
     shared_data = {
                     'streaming_started': streaming_started,
@@ -185,6 +232,7 @@ if __name__ == "__main__":
                     "tickers_fee": tickers_fee,
                     "latest_tenders": latest_tenders,
                     "arb_open": arb_open,
+                    "unwinding": unwinding,
                     "lock": lock
                     }
 
