@@ -450,11 +450,11 @@ class TradingApp():
         """
         self.logger.debug(f"Method postTender called from {self.class_name} class with parameters id={id}, accept={accept}, price={price}")
         if accept:
-            tender = requests.post(self.url + '/tenders' + f'/{id}', headers=self.API_KEY)
+            tender_head = {'price': price}
+            tender = requests.post(self.url + '/tenders' + f'/{id}', headers=self.API_KEY, params=tender_head)
 
         else:
-            tender_head = {'id': id}
-            tender = requests.delete(self.url + '/tenders', headers=self.API_KEY, params=tender_head)
+            tender = requests.delete(self.url + '/tenders' + f'/{id}', headers=self.API_KEY)
         
         if tender.status_code == 200:
             self.logger.info(f"Tender {id} was accepted")
