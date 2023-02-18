@@ -84,7 +84,7 @@ class TradingApp():
         """
         self.logger.debug(f"Method currentAbsoluteTick called from {self.class_name} class")
         tick = self.currentTick()
-        return self.period * self.ticks_per_period + tick
+        return (self.period - 1) * self.ticks_per_period + tick
 
 
     def getCaseDetails(self) -> dict:

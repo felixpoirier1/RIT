@@ -135,49 +135,48 @@ def main(app : TradingApp, **s_d):
             #                 app.postOrder("SELL" if pos > 0 else "BUY", s_d["tickers_name"][index], abs(pos))
                     
             #         s_d["arb_open"] = False
-            print(app.currentTick())
-            # latest_tenders = dict(s_d["latest_tenders"])
-            # if latest_tenders != {} and s_d["unwinding"].value == False:
-            #     id = list(latest_tenders.keys())[0]
-            #     ticker = latest_tenders[id]["ticker"]
-            #     #direction can take the values "BUY" or "SELL"
-            #     direction = latest_tenders[id]["action"]
-            #     price = latest_tenders[id]["price"]
-            #     quantity = latest_tenders[id]["quantity"]
-            #     seconds_till_expiration =  latest_tenders[id]["expires"] - tick
+            latest_tenders = dict(s_d["latest_tenders"])
+            if latest_tenders != {} and s_d["unwinding"].value == False:
+                id = list(latest_tenders.keys())[0]
+                ticker = latest_tenders[id]["ticker"]
+                #direction can take the values "BUY" or "SELL"
+                direction = latest_tenders[id]["action"]
+                price = latest_tenders[id]["price"]
+                quantity = latest_tenders[id]["quantity"]
+                seconds_till_expiration =  latest_tenders[id]["expires"] - tick
 
-            #     if direction == "BUY":
-            #         direction_to_unwind = "SELL"
-            #     else:
-            #         direction_to_unwind = "BUY"
-            #     #verify that the price is appropriate and that there is a market to sell to or buy from
-            #     bidask = app.getSecuritiesBook(ticker)
+                if direction == "BUY":
+                    direction_to_unwind = "SELL"
+                else:
+                    direction_to_unwind = "BUY"
+                #verify that the price is appropriate and that there is a market to sell to or buy from
+                bidask = app.getSecuritiesBook(ticker)
                 
-            #     liquidty_cond = enoughLiquidty(bidask, 0.5, price, quantity, direction_to_unwind)
-            #     #optimalPrice(bidask, quantity, direction_to_unwind)
-            #     #send the order
-            #     if liquidty_cond:
-            #         id = list(latest_tenders.keys())[0]
-            #         response = app.postTender(id, "ACCEPT")
-            #         print(response)
+                liquidty_cond = enoughLiquidty(bidask, 0.5, price, quantity, direction_to_unwind)
+                #optimalPrice(bidask, quantity, direction_to_unwind)
+                #send the order
+                if liquidty_cond:
+                    id = list(latest_tenders.keys())[0]
+                    response = app.postTender(id, "ACCEPT")
+                    print(response)
 
-            #         # verifiy if the order was accepted
-            #         if response == 200:
-            #             # if it was accepted, then we need to unwind the position
-            #             total_order_qty = np.ceil(quantity/10000)
-            #             if direction_to_unwind == "SELL":
-            #                 tiers = [1 for i in range(1, int(total_order_qty))]
-            #             else:
-            #                 tiers = [1 for i in range(1, int(total_order_qty))]
-            #             remaining_qty = quantity
-            #             while remaining_qty != 0:
+                    # verifiy if the order was accepted
+                    if response == 200:
+                        # if it was accepted, then we need to unwind the position
+                        total_order_qty = np.ceil(quantity/10000)
+                        if direction_to_unwind == "SELL":
+                            tiers = [1 for i in range(1, int(total_order_qty))]
+                        else:
+                            tiers = [1 for i in range(1, int(total_order_qty))]
+                        remaining_qty = quantity
+                        while remaining_qty != 0:
 
-            #                 quantity = min(remaining_qty, 10000)
-            #                 price = (RITC_bid+RITC_ask)/2
-            #                 price = price - 1 if direction_to_unwind == "SELL" else price + 1
+                            quantity = min(remaining_qty, 10000)
+                            price = (RITC_bid+RITC_ask)/2
+                            price = price - 1 if direction_to_unwind == "SELL" else price + 1
 
-            #                 g = app.postOrder(direction_to_unwind, ticker, quantity, price, type="LIMIT")
-            #                 remaining_qty -= quantity  
+                            g = app.postOrder(direction_to_unwind, ticker, quantity, price, type="LIMIT")
+                            remaining_qty -= quantity  
 
                     
 
@@ -203,7 +202,6 @@ if __name__ == "__main__":
     # retrieves the list of tickers and stores it in a shared lis
     
     securities_info = app.getSecurities()
-    print(app.getCaseDetails())
     tickers_name_ = list(securities_info.keys())
     tickers_name = [mp.Array('c', 1) for i in range(len(tickers_name_))]
     tickers_name[:] = list(securities_info.keys())
