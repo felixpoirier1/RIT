@@ -524,4 +524,6 @@ class TradingApp():
         
 
 if __name__ == "__main__":
-    print("Hello World")
+    app = TradingApp("9999", "EG6SMVYC")
+    x = TradingApp.currentAbsoluteTick(app)
+    print(x)
