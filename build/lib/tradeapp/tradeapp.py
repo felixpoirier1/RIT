@@ -74,9 +74,26 @@ class TradingApp():
                 time.sleep(1)
                 return self.currentTick()
         
-    
-    def getCaseDetails(self):
+    def currentAbsoluteTick(self) -> int:
+        """Returns the current tick of the all trading periods. If the period is over, it will call the getCaseDetails method to update the period, tick & total_periods attributes and then call itself again to return the current tick.
+
+        Returns
+        -------
+        int
+            The current tick of the trading periods.
+        """
+        self.logger.debug(f"Method currentAbsoluteTick called from {self.class_name} class")
+        tick = self.currentTick()
+        return (self.period - 1) * self.ticks_per_period + tick
+
+
+    def getCaseDetails(self) -> dict:
         """Gets the case details from the API and stores them in the class attributes. (period, tick & total_periods)
+
+        Returns
+        -------
+        dict
+            The case details.
         """
         self.logger.debug(f"Method getCaseDetails called from {self.class_name} class")
         case = requests.get(self.url + '/case', headers=self.API_KEY).json()
@@ -93,8 +110,13 @@ class TradingApp():
         return case
 
         
-    def getTraderDetails(self):
+    def getTraderDetails(self) -> dict:
         """Gets the trader details from the API and stores them in the class attributes. (trader_id, first_name & last_name)
+
+        Returns
+        -------
+        dict
+            The trader details.
         """
         self.logger.debug(f"Method getTraderDetails called from {self.class_name} class")
         trader = requests.get(self.url + '/trader', headers=self.API_KEY).json()
@@ -497,4 +519,6 @@ class TradingApp():
         
 
 if __name__ == "__main__":
-    print("Hello World")
+    app = TradingApp("9999", "EG6SMVYC")
+    x = TradingApp.currentAbsoluteTick(app)
+    print(x)
