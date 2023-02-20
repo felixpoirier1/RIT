@@ -74,9 +74,26 @@ class TradingApp():
                 time.sleep(1)
                 return self.currentTick()
         
-    
-    def getCaseDetails(self):
+    def currentAbsoluteTick(self) -> int:
+        """Returns the current tick of the all trading periods. If the period is over, it will call the getCaseDetails method to update the period, tick & total_periods attributes and then call itself again to return the current tick.
+
+        Returns
+        -------
+        int
+            The current tick of the trading periods.
+        """
+        self.logger.debug(f"Method currentAbsoluteTick called from {self.class_name} class")
+        tick = self.currentTick()
+        return (self.period - 1) * self.ticks_per_period + tick
+
+
+    def getCaseDetails(self) -> dict:
         """Gets the case details from the API and stores them in the class attributes. (period, tick & total_periods)
+
+        Returns
+        -------
+        dict
+            The case details.
         """
         self.logger.debug(f"Method getCaseDetails called from {self.class_name} class")
         case = requests.get(self.url + '/case', headers=self.API_KEY).json()
@@ -93,8 +110,13 @@ class TradingApp():
         return case
 
         
-    def getTraderDetails(self):
+    def getTraderDetails(self) -> dict:
         """Gets the trader details from the API and stores them in the class attributes. (trader_id, first_name & last_name)
+
+        Returns
+        -------
+        dict
+            The trader details.
         """
         self.logger.debug(f"Method getTraderDetails called from {self.class_name} class")
         trader = requests.get(self.url + '/trader', headers=self.API_KEY).json()
@@ -224,7 +246,7 @@ class TradingApp():
             self.logger.debug(f"Security called and created : self.security which contains {'security' if len(security) !=0 else 'nothing'}")
             return security
     
-    def getSecuritiesBook(self, ticker: str, limit : int = None):
+    def getSecuritiesBook(self, ticker: str, limit : int = None, df : bool = True):
         """Returns the security book which is a dataframe of bid and asks for a specific period
 
         Parameters
@@ -244,12 +266,17 @@ class TradingApp():
         security_book_head = {'ticker': ticker, 'limit': limit}
         securitybook = requests.get(self.url + '/securities/book', headers=self.API_KEY, params=security_book_head).json()
         self.logger.debug(f"Security book called and created : self.securitybook which contains {'security book' if len(securitybook) !=0 else 'nothing'}")
-        return {
-            "bids" : 
-                pd.DataFrame(securitybook["bids"]).set_index("order_id").sort_values("price", ascending=False), 
-            "asks": 
-                pd.DataFrame(securitybook["asks"]).set_index("order_id").sort_values("price", ascending=True)
-            }
+        if df:
+            return {
+                "bids" : 
+                    pd.DataFrame(securitybook["bids"]).set_index("order_id").sort_values("price", ascending=False), 
+                "asks": 
+                    pd.DataFrame(securitybook["asks"]).set_index("order_id").sort_values("price", ascending=True)
+                }
+        else:
+            #else return numpy array
+            return securitybook
+        
     
     def getSecuritiesHistory(self, ticker : str, period : int = None, limit : int = None):
         """Fetches the trading history of a given security for a given period of time or a given number of trades.
