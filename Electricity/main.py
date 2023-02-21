@@ -189,9 +189,9 @@ def newsInfoFounder(news: list):
             # extract the forecasted sunlight information from the news item's body
             # and add it to the InfoDic dictionary with a key that
 
-
+            
             InfoDic["Sunlight forecast at"+str(textAnalysis.returnDay(j["headline"]))+" at tick "+str(j["tick"])]=textAnalysis.returnTwoNums(j["body"],"between","sunlight")
-            SunlightLog[str(j["tick"])]=textAnalysis.returnTwoNums(j["body"],"between","sunlight"),textAnalysis.returnDay(j["headline"])
+            SunlightLog[str(j["tick"])+textAnalysis.returnDay(j["headline"])]=textAnalysis.returnTwoNums(j["body"],"between","sunlight")
         
         elif "TENDER" in j["headline"]:
             InfoDic["Tender "+"Tick "+str(j["tick"])]=textAnalysis.word_in_phrase("BUY",j["body"])
@@ -215,6 +215,7 @@ def reorder_dict_by_int_keys(d):
 def streamElements(app,role):
     global new
     global period
+    global sunLight
     bidask = app.getSecuritiesBook("NG")
     bid = float(bidask["asks"].iloc[0]["price"])
     ask = float(bidask["bids"].iloc[0]["price"])
@@ -224,7 +225,6 @@ def streamElements(app,role):
     
     newsinfo=newsInfoFounder(new)
     spot_securities = {
-    1: "ELEC-day1",
     2: "ELEC-day2",
     3: "ELEC-day3",
     4: "ELEC-day4",
@@ -240,16 +240,29 @@ def streamElements(app,role):
     if role==3:
         print("Trader Functions")
         todayBidSpot=bidaskSpot
-        spot_volume=next(iter(new[5].values()))
-        PriceVol=next(iter(new[6].values()))
-        possibleTenders=new[3]
-        fines=new[4]
+        spot_volume=next(iter(newsinfo[5].values()))
+        PriceVol=next(iter(newsinfo[6].values()))
+        possibleTenders=newsinfo[3]
+        fines=newsinfo[4]
+        tendeoffer=app.getTenders()
     elif role==2:
         print("Distributor Function")
-
-            
-   
-    
+        todayBidSpot=bidaskSpot
+        spot_volume=next(iter(newsinfo[5].values()))
+        PriceVol=next(iter(newsinfo[6].values()))
+        fines=newsinfo[4]
+        temperature=newsinfo[1]
+        print(temperature)
+    elif role==1:
+        print("Producer Function")
+        sunLight=newsinfo[2]
+        
+        todayBidSpot=bidaskSpot
+        ngPrice=bidask
+        spot_volume=next(iter(newsinfo[5].values()))
+        PriceVol=next(iter(newsinfo[6].values()))
+        fines=newsinfo[4]
+        print(sunLight)
 
 ############### Main function ################
 
