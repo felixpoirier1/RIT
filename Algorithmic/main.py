@@ -100,18 +100,21 @@ def main(app : TradingApp, **s_d):
             
             RITC_bid = s_d["tickers_bid"][s_d["tickers_name"].index("RITC")]
             RITC_ask = s_d["tickers_ask"][s_d["tickers_name"].index("RITC")]
+            RITC_pos = s_d["tickers_pos"][s_d["tickers_name"].index("RITC")]
 
             BULL_ask = s_d["tickers_ask"][s_d["tickers_name"].index("BULL")]
             BULL_bid = s_d["tickers_bid"][s_d["tickers_name"].index("BULL")]
+            BULL_pos = s_d["tickers_pos"][s_d["tickers_name"].index("BULL")]
 
             BEAR_ask = s_d["tickers_ask"][s_d["tickers_name"].index("BEAR")]
             BEAR_bid = s_d["tickers_bid"][s_d["tickers_name"].index("BEAR")]
+            BEAR_pos = s_d["tickers_pos"][s_d["tickers_name"].index("BEAR")]
 
             USD_ask = s_d["tickers_ask"][s_d["tickers_name"].index("USD")]
             USD_bid = s_d["tickers_bid"][s_d["tickers_name"].index("USD")]
 
             # all([pos == 0 for pos in s_d["tickers_pos"][:]]) and 
-            if ((BULL_ask + BEAR_ask)/USD_ask < (RITC_bid - ARB_SLACK)) and ((arb_type == -1) or (arb_type == 0)) and (tick >= last_arb_tick + time_till_double_down):
+            if ((BULL_ask + BEAR_ask)/USD_ask < (RITC_bid - ARB_SLACK)) and ((arb_type == -1) or (arb_type == 0)) and (tick >= last_arb_tick + time_till_double_down) and (abs(BEAR_pos)*BEAR_ask + abs(BULL_pos)*BULL_ask + abs(RITC_pos)*RITC_bid < 280000):
                 # find the optimal quantity to arbitrage
                 BULL_book = app.getSecuritiesBook("BULL", 10, False)
                 BULL_book = np.array([[float(BULL_book["asks"][i]["price"]/USD_ask), int(BULL_book["asks"][i]["quantity"] - BULL_book["asks"][i]["quantity_filled"])] for i in range(len(BULL_book["asks"]))])
@@ -142,7 +145,7 @@ def main(app : TradingApp, **s_d):
                     arb_open = True
                     arb_type = 0
 
-            elif ((BULL_bid + BEAR_bid)/USD_bid > (RITC_ask + ARB_SLACK)) and ((arb_type == -1) or (arb_type == 1))  and (tick >= last_arb_tick + time_till_double_down):
+            elif ((BULL_bid + BEAR_bid)/USD_bid > (RITC_ask + ARB_SLACK)) and ((arb_type == -1) or (arb_type == 1))  and (tick >= last_arb_tick + time_till_double_down) and (abs(BEAR_pos)*BEAR_bid + abs(BULL_pos)*BULL_bid + abs(RITC_pos)*RITC_ask < 280000):
                 # find the optimal quantity to arbitrage
                 BULL_book = app.getSecuritiesBook("BULL", 10, False)
                 BULL_book = np.array([[float(BULL_book["bids"][i]["price"]/USD_bid), int(BULL_book["bids"][i]["quantity"] - BULL_book["bids"][i]["quantity_filled"])] for i in range(len(BULL_book["bids"]))])
@@ -177,60 +180,73 @@ def main(app : TradingApp, **s_d):
             if arb_open == True and arb_type == 0:
                 if ((BULL_bid + BEAR_bid)/USD_bid > RITC_ask + swing_difference):
                     print("-"*50)
+                    print(arb_qty_realized)
                     # unwind position
-                    if arb_qty_realized <= 10000:
-                        app.postOrder("BUY", "RITC", arb_qty_realized)
-                        app.postOrder("SELL", "BULL", arb_qty_realized)
-                        app.postOrder("SELL", "BEAR", arb_qty_realized)
-                        print("="*50)
+                    while arb_qty_realized > 0:
+                        BULL_book = app.getSecuritiesBook("BULL", 10, False)
+                        BULL_book = np.array([[float(BULL_book["bids"][i]["price"]/s_d["tickers_bid"][s_d["tickers_name"].index("USD")]), int(BULL_book["bids"][i]["quantity"] - BULL_book["bids"][i]["quantity_filled"])] for i in range(len(BULL_book["bids"]))])
 
-                    else:
-                        while arb_qty_realized > 0:
-                            if ((BULL_bid + BEAR_bid)/USD_bid > RITC_ask + swing_difference):
-                                swing_difference = swing_difference * 0.8
-                                qty_to_sell = min(arb_qty_realized, 10000)
-                                app.postOrder("BUY", "RITC", qty_to_sell)
-                                app.postOrder("SELL", "BULL", qty_to_sell)
-                                app.postOrder("SELL", "BEAR", qty_to_sell)
-                                arb_qty_realized -= qty_to_sell
-                                time.sleep(0.1)
-                            else:
-                                pass
+                        BEAR_book = app.getSecuritiesBook("BEAR", 10, False)
+                        BEAR_book = np.array([[float(BEAR_book["bids"][i]["price"]/s_d["tickers_bid"][s_d["tickers_name"].index("USD")]), int(BEAR_book["bids"][i]["quantity"] - BEAR_book["bids"][i]["quantity_filled"])] for i in range(len(BEAR_book["bids"]))])
+
+                        RITC_book = app.getSecuritiesBook("RITC", 10, False)
+                        RITC_book = np.array([[int(RITC_book["asks"][i]["quantity"] - RITC_book["asks"][i]["quantity_filled"]), float(RITC_book["asks"][i]["price"])] for i in range(len(RITC_book["asks"]))])
+
+                        synthbook = createSyntheticETF({"BULL":BULL_book, "BEAR":BEAR_book})
+
+                        qty_to_sell = min(findOptimalArbitrageQty(synthbook, RITC_book, 0), 10000)
+
+                        if qty_to_sell != 0:
+
+                            swing_difference = swing_difference * 0.8
+                            qty_to_sell = min(arb_qty_realized, 10000)
+                            app.postOrder("BUY", "RITC", qty_to_sell)
+                            app.postOrder("SELL", "BULL", qty_to_sell)
+                            app.postOrder("SELL", "BEAR", qty_to_sell)
+                            arb_qty_realized -= qty_to_sell
                             time.sleep(0.1)
-                        swing_difference = 0.05
-                        print("="*50)
-                    
-                    arb_open = False
-                    arb_qty_realized = 0
-                    arb_multiplier = 1
-                    arb_type = -1
+                        else:
+                            pass
+                        time.sleep(0.1)
+                    swing_difference = 0.05
+                    print("="*50)
+                
+                arb_open = False
+                arb_qty_realized = 0
+                arb_multiplier = 1
+                arb_type = -1
 
             
             elif arb_open == True and arb_type == 1:
                 if ((BULL_ask + BEAR_ask)/USD_ask < RITC_bid - swing_difference):
                     print("-"*50)
+                    print(arb_qty_realized)
                     # unwind position 
-                    if arb_qty_realized <= 10000:
-                        app.postOrder("SELL", "RITC", arb_qty_realized)
-                        app.postOrder("BUY", "BULL", arb_qty_realized)
-                        app.postOrder("BUY", "BEAR", arb_qty_realized)
-                        print("="*50)
-                    
-                    else:
-                        while arb_qty_realized > 0:
-                            if ((BULL_ask + BEAR_ask)/USD_ask < RITC_bid - swing_difference):
-                                swing_difference = swing_difference * 0.8
-                                qty_to_sell = min(arb_qty_realized, 10000)
-                                app.postOrder("SELL", "RITC", qty_to_sell)
-                                app.postOrder("BUY", "BULL", qty_to_sell)
-                                app.postOrder("BUY", "BEAR", qty_to_sell)
-                                arb_qty_realized -= qty_to_sell
-                                time.sleep(0.1)
-                            else:
-                                pass
+                    while arb_qty_realized > 0:
+                        BULL_book = app.getSecuritiesBook("BULL", 10, False)
+                        BULL_book = np.array([[float(BULL_book["bids"][i]["price"]/s_d["tickers_ask"][s_d["tickers_name"].index("USD")]), int(BULL_book["bids"][i]["quantity"] - BULL_book["bids"][i]["quantity_filled"])] for i in range(len(BULL_book["asks"]))])
+
+                        BEAR_book = app.getSecuritiesBook("BEAR", 10, False)
+                        BEAR_book = np.array([[float(BEAR_book["bids"][i]["price"]/s_d["tickers_ask"][s_d["tickers_name"].index("USD")]), int(BEAR_book["bids"][i]["quantity"] - BEAR_book["bids"][i]["quantity_filled"])] for i in range(len(BEAR_book["asks"]))])
+
+                        RITC_book = app.getSecuritiesBook("RITC", 10, False)
+                        RITC_book = np.array([[int(RITC_book["asks"][i]["quantity"] - RITC_book["asks"][i]["quantity_filled"]), float(RITC_book["asks"][i]["price"])] for i in range(len(RITC_book["bids"]))])
+
+                        qty_to_sell = min(findOptimalArbitrageQty(RITC_book, synthbook, -0.2), 10000)
+
+                        if qty_to_sell != 0:
+                            swing_difference = swing_difference * 0.8
+                            qty_to_sell = min(arb_qty_realized, 10000)
+                            app.postOrder("SELL", "RITC", qty_to_sell)
+                            app.postOrder("BUY", "BULL", qty_to_sell)
+                            app.postOrder("BUY", "BEAR", qty_to_sell)
+                            arb_qty_realized -= qty_to_sell
                             time.sleep(0.1)
-                        swing_difference = 0.05
-                        print("="*50)
+                        else:
+                            pass
+                        time.sleep(0.1)
+                    swing_difference = 0.05
+                    print("="*50)
                     
                     arb_open = False
                     arb_qty_realized = 0
