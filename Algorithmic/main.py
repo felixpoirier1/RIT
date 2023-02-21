@@ -1,6 +1,6 @@
 #import tradeapp module 
 from tradeapp.tradeapp import TradingApp, LOG_COLORS
-from utils import enoughLiquidty, optimalPrice
+from utils import createSyntheticETF, findOptimalArbitrageQty
 import matplotlib.pyplot as plt
 import numpy as np
 import time
@@ -14,7 +14,7 @@ logger.setLevel(logging.DEBUG)
 
 # create console handler and set level to debug
 ch = logging.StreamHandler()
-ch.setLevel(logging.WARNING)
+ch.setLevel(logging.INFO)
 
 # Define custom formatter with color codes
 class ColoredFormatter(logging.Formatter):
@@ -81,19 +81,22 @@ def main(app : TradingApp, **s_d):
     #while True is a loop that will run forever (CTRL+C to stop it)
     arb_type = -1
     ARB_COMMISSION = 0.12
-    ARB_SLIPPAGE = 0.1
+    ARB_SLIPPAGE = 0.02
+    arb_qty_realized = 0
     ARB_SLACK = ARB_COMMISSION + ARB_SLIPPAGE
     arb_open = False
+    last_arb_tick = 0
+    time_till_double_down = 0
+    arb_multiplier = 1
+    time_till_double_down = 2
     while True:
 
         if s_d["streaming_started"].value:
-            time.sleep(0.1)
-            # tick = app.currentTick()
-            # if tick != None:
-            #     print(str(tick).zfill(3), end="\r")
-
-            #print(s_d["tickers_ask"][:])
-
+            
+            tick = app.currentTick()
+            if tick != None:
+                print(str(tick).zfill(3), end="\r")
+            
             RITC_bid = s_d["tickers_bid"][s_d["tickers_name"].index("RITC")]
             RITC_ask = s_d["tickers_ask"][s_d["tickers_name"].index("RITC")]
 
@@ -107,41 +110,118 @@ def main(app : TradingApp, **s_d):
             USD_bid = s_d["tickers_bid"][s_d["tickers_name"].index("USD")]
 
             # all([pos == 0 for pos in s_d["tickers_pos"][:]]) and 
-            if (BULL_ask + BEAR_ask)/USD_ask < RITC_bid - ARB_SLACK and arb_open == False:
-                # take position
-                app.postOrder("SELL", "RITC", 10)
-                app.postOrder("BUY", "BULL", 10)
-                app.postOrder("BUY", "BEAR", 10)
-                arb_open = True
-                arb_type = 0
+            if ((BULL_ask + BEAR_ask)/USD_ask < (RITC_bid - ARB_SLACK)) and ((arb_type == -1) or (arb_type == 0)) and (tick >= last_arb_tick + time_till_double_down):
+                print("Arbitrage opportunity detected! SHORTING RITC")                                
+                # find the optimal quantity to arbitrage
+                BULL_book = app.getSecuritiesBook("BULL", 10, False)
+                BULL_book = np.array([[float(BULL_book["asks"][i]["price"]/USD_ask), int(BULL_book["asks"][i]["quantity"] - BULL_book["asks"][i]["quantity_filled"])] for i in range(len(BULL_book["asks"]))])
 
-            elif ((BULL_bid + BEAR_bid)/USD_bid > (RITC_ask + ARB_SLACK)) and arb_open == False:
-                # take position
-                app.postOrder("BUY", "RITC", 10)
-                app.postOrder("SELL", "BULL", 10)
-                app.postOrder("SELL", "BEAR", 10)
-                arb_type = 1
-                arb_open = True
+                BEAR_book = app.getSecuritiesBook("BEAR", 10, False)
+                BEAR_book = np.array([[float(BEAR_book["asks"][i]["price"]/USD_ask), int(BEAR_book["asks"][i]["quantity"] - BEAR_book["asks"][i]["quantity_filled"])] for i in range(len(BEAR_book["asks"]))])
+
+                RITC_book = app.getSecuritiesBook("RITC", 10, False)
+                RITC_book = np.array([[int(RITC_book["bids"][i]["quantity"] - RITC_book["bids"][i]["quantity_filled"]), float(RITC_book["bids"][i]["price"]),] for i in range(len(RITC_book["bids"]))])
+                synthbook = createSyntheticETF({"BULL":BULL_book, "BEAR":BEAR_book})
+
+                arb_quantity = findOptimalArbitrageQty(RITC_book, synthbook, ARB_SLACK)
+
+                print(arb_quantity)
+
+                if arb_quantity == 0:
+                    time.sleep(0.01)
+                    continue
+
+                else:
+                    arb_quantity *= arb_multiplier
+                    arb_multiplier = arb_multiplier**2
+                    # take position
+                    app.postOrder("SELL", "RITC", arb_quantity)
+                    app.postOrder("BUY", "BULL", arb_quantity)
+                    app.postOrder("BUY", "BEAR", arb_quantity)
+                    arb_qty_realized += arb_quantity
+                    last_arb_tick = tick
+                    arb_open = True
+                    arb_type = 0
+
+            elif ((BULL_bid + BEAR_bid)/USD_bid > (RITC_ask + ARB_SLACK)) and ((arb_type == -1) or (arb_type == 1))  and (tick >= last_arb_tick + time_till_double_down):
+                # find the optimal quantity to arbitrage
+                print("Arbitrage opportunity detected! BUYING RITC")
+                BULL_book = app.getSecuritiesBook("BULL", 10, False)
+                BULL_book = np.array([[float(BULL_book["bids"][i]["price"]/USD_bid), int(BULL_book["bids"][i]["quantity"] - BULL_book["bids"][i]["quantity_filled"])] for i in range(len(BULL_book["bids"]))])
+
+                BEAR_book = app.getSecuritiesBook("BEAR", 10, False)
+                BEAR_book = np.array([[float(BEAR_book["bids"][i]["price"]/USD_bid), int(BEAR_book["bids"][i]["quantity"] - BEAR_book["bids"][i]["quantity_filled"])] for i in range(len(BEAR_book["bids"]))])
+
+                RITC_book = app.getSecuritiesBook("RITC", 10, False)
+                RITC_book = np.array([[int(RITC_book["asks"][i]["quantity"] - RITC_book["asks"][i]["quantity_filled"]), float(RITC_book["asks"][i]["price"])] for i in range(len(RITC_book["asks"]))])
+
+                synthbook = createSyntheticETF({"BULL":BULL_book, "BEAR":BEAR_book})
+
+                arb_quantity = min(findOptimalArbitrageQty(synthbook, RITC_book, ARB_SLACK), 10000)
+
+                print(arb_quantity)
+
+                if arb_quantity == 0:
+                    time.sleep(0.01)
+                    continue
+                
+                else:
+                    arb_quantity *= arb_multiplier
+                    arb_multiplier = arb_multiplier**2
+                    # take position
+                    app.postOrder("BUY", "RITC", arb_quantity)
+                    app.postOrder("SELL", "BULL", arb_quantity)
+                    app.postOrder("SELL", "BEAR", arb_quantity)
+                    arb_qty_realized += arb_quantity
+                    last_arb_tick = tick
+                    arb_type = 1
+                    arb_open = True
 
             
             if arb_open == True and arb_type == 0:
                 if ((BULL_bid + BEAR_bid)/USD_bid > RITC_ask):
                     # unwind position
-                    app.postOrder("BUY", "RITC", 10)
-                    app.postOrder("SELL", "BULL", 10)
-                    app.postOrder("SELL", "BEAR", 10)
+                    if arb_qty_realized <= 10000:
+                        app.postOrder("BUY", "RITC", arb_qty_realized)
+                        app.postOrder("SELL", "BULL", arb_qty_realized)
+                        app.postOrder("SELL", "BEAR", arb_qty_realized)
+
+                    else:
+                        while arb_qty_realized > 0:
+                            qty_to_sell = min(arb_qty_realized, 10000)
+                            app.postOrder("BUY", "RITC", qty_to_sell)
+                            app.postOrder("SELL", "BULL", qty_to_sell)
+                            app.postOrder("SELL", "BEAR", qty_to_sell)
+                            arb_qty_realized -= qty_to_sell
+                            time.sleep(0.1)
+                    
                     arb_open = False
-                    time.sleep(0.5)
+                    arb_qty_realized = 0
+                    arb_multiplier = 1
+                    arb_type = -1
 
             
             elif arb_open == True and arb_type == 1:
                 if ((BULL_ask + BEAR_ask)/USD_ask < RITC_bid):
                     # unwind position 
-                    app.postOrder("SELL", "RITC", 10)
-                    app.postOrder("BUY", "BULL", 10)
-                    app.postOrder("BUY", "BEAR", 10)
+                    if arb_qty_realized <= 10000:
+                        app.postOrder("SELL", "RITC", arb_qty_realized)
+                        app.postOrder("BUY", "BULL", arb_qty_realized)
+                        app.postOrder("BUY", "BEAR", arb_qty_realized)
+                    
+                    else:
+                        while arb_qty_realized > 0:
+                            qty_to_sell = min(arb_qty_realized, 10000)
+                            app.postOrder("SELL", "RITC", qty_to_sell)
+                            app.postOrder("BUY", "BULL", qty_to_sell)
+                            app.postOrder("BUY", "BEAR", qty_to_sell)
+                            arb_qty_realized -= qty_to_sell
+                            time.sleep(0.1)
+                    
                     arb_open = False
-                    time.sleep(0.5)
+                    arb_qty_realized = 0
+                    arb_multiplier = 1
+                    arb_type = -1
 
 
 
@@ -203,18 +283,6 @@ def main(app : TradingApp, **s_d):
 if __name__ == "__main__":
     app = MyTradingApp("9999", "0CEN4JP9")
     
-    def TESTgetSecuritiesBook():
-        book = app.getSecuritiesBook("RITC", 10, False)
-        book = np.array([[float(book["bids"][i]["price"]), int(book["bids"][i]["quantity"])] for i in range(len(book["bids"]))])
-        print(book)
-        return None
-    def TEST1getSecuritiesBook():
-        book = app.getSecuritiesBook("RITC", 10, True)
-        return None
-    print(timeit.timeit(TESTgetSecuritiesBook, number=2))
-    print(timeit.timeit(TEST1getSecuritiesBook, number=2))
-
-    exit()
     # shared data contains the data that will be shared between processes
     # it's important that data that is stored in shared_data and is declared using mp.Value,
     # or mp.Array otherwise it will not be shared between processes.
@@ -232,16 +300,10 @@ if __name__ == "__main__":
     tickers_ask = mp.Array('f', len(tickers_name_)) 
     tickers_pos = mp.Array('f', len(tickers_name_))
 
-    tickers_fee = mp.Array('f', len(tickers_name_))
-    tickers_fee[:] = [securities_info[ticker]["trading_fee"] for ticker in tickers_name_]
-
     latest_tenders = {}
     mgr = mp.Manager()
     latest_tenders = mgr.dict()
     latest_tenders.update(latest_tenders)
-
-    arb_open = mp.Value('b', False)
-    unwinding = mp.Value('b', False)
 
     qty_filled = mp.Array('i', len(tickers_name_))
 
@@ -251,10 +313,7 @@ if __name__ == "__main__":
                     "tickers_bid": tickers_bid,
                     "tickers_ask": tickers_ask,
                     "tickers_pos": tickers_pos,
-                    "tickers_fee": tickers_fee,
                     "latest_tenders": latest_tenders,
-                    "arb_open": arb_open,
-                    "unwinding": unwinding,
                     "qty_filled": qty_filled,
                     "lock": lock
                     }

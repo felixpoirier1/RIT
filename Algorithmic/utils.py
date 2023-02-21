@@ -93,18 +93,18 @@ def optimalPrice(book: dict[pd.DataFrame, pd.DataFrame], quantity: int, directio
     
 import pandas as pd
 
-def createSyntheticETF(books: dict[str, dict[pd.DataFrame, pd.DataFrame]], direction: str):
+def createSyntheticETF(books: dict[str, dict[np.ndarray, np.ndarray]]):
     """
-    This function takes books for two securities and creates a synthetic book for an ETF consiting of the two securities
+    This function takes books for two securities and creates a synthetic book for an ETF consisting of the two securities
 
     Parameters
     ----------
-    books : dict[str, dict[pd.DataFrame, pd.DataFrame]]
+    books : dict[str, dict[np.ndarray, np.ndarray]]
         dict of books for two securities
 
     Returns
     -------
-    pd.DataFrame
+    np.ndarray
         The book with the proper formatting for comparison to the ETF
     """
 
@@ -115,90 +115,103 @@ def createSyntheticETF(books: dict[str, dict[pd.DataFrame, pd.DataFrame]], direc
     books_name = list(books.keys())
 
     # keep iterating until there are no more orders in either book
-    while len(books[books_name[0]][direction]) > 0 and len(books[books_name[1]][direction]) > 0:
+    while books[books_name[0]].shape[0] > 0 and books[books_name[1]].shape[0] > 0:
         # find the lowest volume for the first orders on the books
-        min_quantity = min(books[books_name[0]][direction].iloc[0]["quantity"], books[books_name[1]][direction].iloc[0]["quantity"])
+        min_quantity = min(books[books_name[0]][0][1], books[books_name[1]][0][1])
 
         # calculate the price of the synthetic order
-        price = books[books_name[0]][direction].iloc[0]["price"] + books[books_name[1]][direction].iloc[0]["price"]
+        price = books[books_name[0]][0][0] + books[books_name[1]][0][0]
 
         # create the new order
         synth_book.append([min_quantity, price])
 
         # subtract the quantity from both books
-        books[books_name[0]][direction].iloc[0]["quantity"] -= min_quantity
-        books[books_name[1]][direction].iloc[0]["quantity"] -= min_quantity
+        books[books_name[0]][0][1] -= min_quantity
+        books[books_name[1]][0][1] -= min_quantity
 
         # remove the order from the book if it's completely filled
-        if books[books_name[0]][direction].iloc[0]["quantity"] == 0:
-            books[books_name[0]][direction] = books[books_name[0]][direction].iloc[1:]
+        if books[books_name[0]][0][1] == 0:
+            books[books_name[0]] = np.delete(books[books_name[0]], 0, axis=0)
 
-        if books[books_name[1]][direction].iloc[0]["quantity"] == 0:
-            books[books_name[1]][direction] = books[books_name[1]][direction].iloc[1:]
+        if books[books_name[1]][0][1] == 0:
+            books[books_name[1]] = np.delete(books[books_name[1]], 0, axis=0)
 
     return np.array(synth_book)
 
 
-def findOptimalArbitrageQty(books: dict[str, dict[np.ndarray, np.ndarray]], direction: str, prices: list[float, float], slack: float = 0.02) -> int:
+
+def findOptimalArbitrageQty(bidbook : np.ndarray, askbook : np.ndarray, slack: float = 0.02) -> int:
     """_summary_
 
     Parameters
     ----------
-    books : dict[str, dict[list, pd.DataFrame]]
-        _description_
-    direction : str
-        _description_
-    prices : list[float, float]
-        _description_
+    bidbook : np.ndarray
+        The bid side of the book for the security that is overvalued
+    askbook : np.ndarray
+        The ask side of the book for the security that is undervalued
     slack : float, optional
-        _description_, by default 0.02
+        Quantity to add or remove from the price to account for commission and slippage, by default 0.02
 
     Returns
     -------
     int
-        _description_
+        the optimal quantity to buy/sell in the ETF/ synthetic security
     """
+    bidbook[:, 1] = bidbook[:, 1] - slack
+    askbook[:, 1] = askbook[:, 1] + slack
+
+    bidbook_ = bidbook[bidbook[:, 1] > askbook[0, 1]]
+    askbook_ = askbook[askbook[:, 1] < bidbook[0, 1]]
+
+    qty = min(bidbook_[:, 0].sum(), askbook_[:, 0].sum())
+
+    return round(qty / 10) * 10
+
+    
 
     
 
 if __name__ == "__main__":
     #create BULL book
     BULL = {
-        "bids": pd.DataFrame({
-            "price": [100, 99, 98, 97, 96, 95, 94, 93, 92, 91],
+        "bids": np.array(pd.DataFrame({
+            "price": [101, 100, 99, 97, 96, 95, 94, 93, 92, 91],
             "quantity": [100, 100, 100, 100, 100, 100, 100, 100, 100, 100],
             "quantity_filled": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-        }), 
-        "asks": pd.DataFrame({
-            "price": [101, 102, 103, 104, 105, 106, 107, 108, 109, 110],
+        })), 
+        "asks": np.array(pd.DataFrame({
+            "price": [99, 101, 103, 104, 105, 106, 107, 108, 109, 110],
             "quantity": [100, 100, 100, 100, 100, 100, 100, 100, 100, 100],
             "quantity_filled": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-        })
+        }))
 
     }   
 
     #create BEAR book
     BEAR = {
-        "bids": pd.DataFrame({
+        "bids": np.array(pd.DataFrame({
             "price": [100, 99, 98, 97, 96, 95, 94, 93, 92, 91],
             "quantity": [130, 100, 100, 100, 100, 100, 100, 100, 100, 100],
             "quantity_filled": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-        }),     
-        "asks": pd.DataFrame({
+        })),     
+        "asks": np.array(pd.DataFrame({
             "price": [101, 102, 103, 104, 105, 106, 107, 108, 109, 110],
             "quantity": [120, 100, 100, 100, 100, 100, 100, 100, 100, 100],
             "quantity_filled": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-        })  
+        }))  
     }
 
     print()
 
 
-    print(createSyntheticETF({"security1": BULL, "security2": BEAR}, "asks"))
+    #print(createSyntheticETF({"security1": BULL, "security2": BEAR}, "asks"))
         
     def TESTcreateSyntheticETF():
-        np.array(BEAR["asks"][["price", "quantity"]])
-        #return createSyntheticETF({"security1": BULL, "security2": BEAR}, "bids")
-
+        print(createSyntheticETF({"security1": BULL, "security2": BEAR}))
+        findOptimalArbitrageQty(BULL["bids"], BULL["asks"], 5)
+        return None
+    
+    #print(BULL["asks"])
+    print(findOptimalArbitrageQty(BULL["bids"], BULL["asks"], 5))
     #generate synthetic ETF book
     print(timeit.timeit(TESTcreateSyntheticETF, number=1000))
