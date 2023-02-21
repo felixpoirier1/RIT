@@ -5,6 +5,8 @@ import time
 import multiprocessing as mp
 import logging
 import re
+import pandas as pd
+import array
 
 
 ##### Variables to share between processes #####
@@ -27,14 +29,16 @@ previous_news=None
 temperaturelog={}
 class textAnalysis():
     def returnDay(string:str):
-        days = {"DAY 1", "DAY 2", "DAY 3", "DAY 4", "DAY 5"}
+        
+        days = ["DAY 1", "DAY 2", "DAY 3", "DAY 4", "DAY 5","DAY 6"]
         for day in days:
-            if day in string.capitalize():
+            
+            if day in string:
                 givenday=day
-                break
+                return givenday
             else:
-                givenday="None"
-        return givenday
+                pass
+        
     def returnType(stringElement):
         if "temperature forecast" in stringElement.lower():
             return("Temp")
@@ -59,16 +63,32 @@ class textAnalysis():
        
     def returnTwoNums(phrase,target_string,str2):
         if target_string in phrase:
-            matches = re.findall(r'{}.*?([\d.]+).*?([\d.]+)'.format(target_string), phrase)
+            matches = re.findall(r'{}.*?([\d.]+).*?([\d.]+)'.format(target_string), phrase)[0]
+            matches = [float(match) for match in matches]
+            return matches
             
         else:
-            matches=textAnalysis.returnWordBefore(phrase,1,str2)
+            matches=float(textAnalysis.returnWordBefore(phrase,1,str2))
         return matches
 
-    def returnWordBefore(my_phrase,order,line):
+        
+    def returnWordBefore(phrase,order, substring):
+        # Search for the substring and extract the portion of the string before it
+        match = re.search(r'(.*{}).*'.format(substring), phrase)
+        
+        if match is None:
+            return None
+        
+        prefix = match.group(order)
+        
+        # Search for the last number in the prefix
+        match = re.search(r'\d+(?:\.\d+)?', prefix)
+        if match is None:
+            return None
+        
+        return match.group()
+  
 
-        match = re.search(r'(\d+(?:\.\d+)?)\D+(?={})'.format(line), my_phrase)
-        return(match.group(order))
     def get_decimal_after_word(phrase, word):
        
         
@@ -86,11 +106,18 @@ class textAnalysis():
         decimal = float(decimal_str.group())
 
         return decimal
+    def word_in_phrase(word, phrase):
+        return int(word in phrase)
 
 def newsInfoFounder(news: list):
     # create an empty dictionary to hold the information we'll extract from the news list
     InfoDic = {}
-
+    TempLog={}
+    SunlightLog={}
+    TenderInfoLog={}
+    FineLog={}
+    SpotVol={}
+    PriceVol={}
     # loop through each news item in the list
     for j in news:
         # determine the type of news item based on its headline
@@ -102,6 +129,7 @@ def newsInfoFounder(news: list):
             # and add it to the InfoDic dictionary with a key that includes the day and tick information
             InfoDic["Temp " + textAnalysis.returnDay(j["headline"]) + " at tick " + str(j["tick"])] = (
                 textAnalysis.returnTwoNum(j["body"], "temperature"), j["tick"])
+            TempLog[textAnalysis.returnDay(j["headline"])+str(j["tick"])]=textAnalysis.returnTwoNum(j["body"], "temperature")
 
         # if the news item is about fines
         elif typeReturn == "Fine":
@@ -109,33 +137,51 @@ def newsInfoFounder(news: list):
             # and add it to the InfoDic dictionary with a key that includes the day and tick information
             InfoDic["Fines " + str(textAnalysis.returnDay(j["body"])) + " at tick " + str(j["tick"])] = (
                 textAnalysis.returnTwoNum(j["body"], "fine")[0], j["tick"])
+            FineLog[str(j["tick"])]=(textAnalysis.returnTwoNum(j["body"], "fine")[0], j["tick"])
 
         # if the news item is about volume and price movements for a particular commodity
         elif typeReturn == "VolumeBul":
+            
             # extract the volume information and tick information from the news item's body
             # as well as other information about the contracts and participants
             # and add it to the InfoDic dictionary with a key that includes the day and tick information
-            InfoDic["VolumeBul" + textAnalysis.returnDay(j["headline"]) + " at tick" + str(j["tick"])] = [
+            InfoDic["VolumeBul"+ " at tick" + str(j["tick"])] = [
                 textAnalysis.returnTwoNum(j["body"], "between"),
-                j["tick"],
                 textAnalysis.returnWordBefore(j["body"], 1, "contracts for buying"),
                 textAnalysis.returnWordBefore(j["body"], 1, "contracts for selling"),
                 textAnalysis.returnWordBefore(j["body"], 1, "Producers"),
                 textAnalysis.returnWordBefore(j["body"], 1, "Distributors"),
                 textAnalysis.returnWordBefore(j["body"], 1, "Traders"),
-                float(textAnalysis.returnWordBefore(j["body"], 1, "cent")) / 100
+                textAnalysis.returnWordBefore(j["body"],1,"cent")
             ]
+            PriceVol[str(j["tick"])]=[
+                textAnalysis.returnTwoNum(j["body"], "between"),
+                textAnalysis.returnWordBefore(j["body"], 1, "contracts for buying"),
+                textAnalysis.returnWordBefore(j["body"], 1, "contracts for selling"),
+                textAnalysis.returnWordBefore(j["body"], 1, "Producers"),
+                textAnalysis.returnWordBefore(j["body"], 1, "Distributors"),
+                textAnalysis.returnWordBefore(j["body"], 1, "Traders"),
+                textAnalysis.returnWordBefore(j["body"],1,"cent")
+            ]
+
 
         # if the news item is about spot volume and price movements for a particular commodity
         elif typeReturn == "SpotVol":
             # extract the spot volume and price information and tick information from the news item's body
             # and add it to the InfoDic dictionary with a key that includes the day and tick information
-            InfoDic["SpotVol " + str(textAnalysis.returnDay(j["headline"])) + " at tick " + str(j["tick"])] = (
+            InfoDic["SpotVol "+ " at tick " + str(j["tick"])] = (
                 textAnalysis.returnWordBefore(j["body"], 1, "to buy")[0],
                 textAnalysis.get_decimal_after_word(j["body"], "buy at a price"),
                 textAnalysis.returnWordBefore(j["body"], 1, "to sell")[0],
                 textAnalysis.get_decimal_after_word(j["body"], "sell at a price"),
-                j["tick"]
+                
+            )
+            SpotVol[str(j["tick"])]=(
+                textAnalysis.returnWordBefore(j["body"], 1, "to buy")[0],
+                textAnalysis.get_decimal_after_word(j["body"], "buy at a price"),
+                textAnalysis.returnWordBefore(j["body"], 1, "to sell")[0],
+                textAnalysis.get_decimal_after_word(j["body"], "sell at a price")
+                
             )
 
         # if the news item is about sunlight forecast
@@ -145,37 +191,81 @@ def newsInfoFounder(news: list):
 
 
             InfoDic["Sunlight forecast at"+str(textAnalysis.returnDay(j["headline"]))+" at tick "+str(j["tick"])]=textAnalysis.returnTwoNums(j["body"],"between","sunlight")
+            SunlightLog[str(j["tick"])]=textAnalysis.returnTwoNums(j["body"],"between","sunlight"),textAnalysis.returnDay(j["headline"])
         
-    return(InfoDic)      
+        elif "TENDER" in j["headline"]:
+            InfoDic["Tender "+"Tick "+str(j["tick"])]=textAnalysis.word_in_phrase("BUY",j["body"])
+            TenderInfoLog[str(j["tick"])]=textAnalysis.word_in_phrase("BUY",j["body"])
+        SpotVolLog = {}
+        PriceVolLog={}
+        for key in sorted(SpotVol, key=int, reverse=True):
+            SpotVolLog[key] = SpotVol[key]
+        for key in sorted(PriceVol, key=int, reverse=True):
+            PriceVolLog[key] = PriceVol[key]
+    return(InfoDic,TempLog,SunlightLog,TenderInfoLog,FineLog,SpotVolLog,PriceVolLog)      
 
 
     
     
-        
+def reorder_dict_by_int_keys(d):
+    return {k: d[k] for k in sorted(d, key=lambda x: int(x))}
+
     
     
-def streamElements(app, **shared_data):
+def streamElements(app,role):
     global new
+    global period
     bidask = app.getSecuritiesBook("NG")
     bid = float(bidask["asks"].iloc[0]["price"])
-    ask= float(bidask["bids"].iloc[0]["price"])
+    ask = float(bidask["bids"].iloc[0]["price"])
     new = app.getNews()
     
-    print(newsInfoFounder(new))
+    period = app.getCaseDetails()["period"]
     
+    newsinfo=newsInfoFounder(new)
+    spot_securities = {
+    1: "ELEC-day1",
+    2: "ELEC-day2",
+    3: "ELEC-day3",
+    4: "ELEC-day4",
+    5: "ELEC-day5",
+    6: "ELEC-day6"
+    }
+    spot_book_name = spot_securities.get(period)
+
+    #(InfoDic,TempLog,SunlightLog,TenderInfoLog,FineLog,SpotVol)   
+
+    bidaskSpot = app.getSecuritiesBook(spot_book_name)
+    
+    if role==3:
+        print("Trader Functions")
+        todayBidSpot=bidaskSpot
+        spot_volume=next(iter(new[5].values()))
+        PriceVol=next(iter(new[6].values()))
+        possibleTenders=new[3]
+        fines=new[4]
+    elif role==2:
+        print("Distributor Function")
+
+            
    
     
-    
-        #number = float(bidask["asks"].iloc[0]["price"])
-
-
 
 ############### Main function ################
 
 def main(app):
+    """""
+    roles are the roles you are given during the competition
+    role=1 if producer
+    role=2 if distributer
+    role=3 if trader
+    
+    
+    """""
+    
     while True:
         time.sleep(0.001)
-        streamElements(app)
+        streamElements(app,role=3)
         
    
         
@@ -191,14 +281,14 @@ if __name__ == "__main__":
     # or mp.Array otherwise it will not be shared between processes.
     # I recommend declaring these variables right after the imports and before the functions
     # see above for an examples.
-    shared_data = {
-                    'number': number,
-                    "lock": lock
-                    }
+    # shared_data = {
+    #                 'number': number,
+    #                 "lock": lock
+    #                 }
 
-    # streamthread is a variable which will be used to stream data to data declared in shared_data
-    streamthread = mp.Process(target=streamElements, args=(app,), kwargs = shared_data)
-    streamthread.start()
+    # # streamthread is a variable which will be used to stream data to data declared in shared_data
+    # streamthread = mp.Process(target=streamElements, args=(app,rol), kwargs = shared_data)
+    # streamthread.start()
 
 
     main(app)
