@@ -167,9 +167,63 @@ def findOptimalArbitrageQty(bidbook : np.ndarray, askbook : np.ndarray, slack: f
 
     return round(qty / 10) * 10
 
-    
+def findVwap(book : np.ndarray, direction : str, qty : int, slack : float = 0.05) -> float:
+    """This function takes a book as a parameter and returns the VWAP for the book given a certain quantity
 
+    Parameters
+    ----------
+    book : np.ndarray
+        The book to calculate the VWAP for
+    direction : str
+        "bid" or "ask"
+    slack : float, optional
+        price to subtract from vwap to account for trading fees including slippage, by default 0.05
+
+    Returns
+    -------
+    _type_
+        _description_
+    """
+    #only keep orders on the book where the cumulative quantity is less than the quantity we want to trade and include outstanding volume from last order
+    if direction == "bid":
+        book = book[book[:, 0].cumsum() <= qty]
+ 
+    elif direction == "ask":
+        book = book[book[:, 0].cumsum() <= qty]
     
+    #calculate the VWAP
+    if direction == "bid":
+        vwap = (book[:, 0] * (book[:, 1] - slack)).sum() / book[:, 0].sum()
+    elif direction == "ask":
+        vwap = (book[:, 0] * (book[:, 1] + slack)).sum() / book[:, 0].sum()
+    
+    return vwap
+    
+def isProfitable(price : int, book : np.ndarray, direction : str, qty : int, slack : float = 0.05) -> bool:
+    """This function takes a book and a price and determines if it is profitable to trade at that price
+
+    Parameters
+    ----------
+    price : int
+        The price to check
+    book : np.ndarray
+        The book to check
+    direction : str
+        The direction of the order, either "bid" or "ask"
+    slack : float, optional
+        price to subtract from vwap to account for trading fees including slippage, by default 0.05
+
+    Returns
+    -------
+    bool
+        True if profitable, False if not
+    """
+    vwap = findVwap(book, direction, qty, slack)
+    if direction == "bid":
+        return vwap > price
+    elif direction == "ask":
+        return vwap < price
+
 
 if __name__ == "__main__":
     #create BULL book
@@ -191,18 +245,14 @@ if __name__ == "__main__":
     BEAR = {
         "bids": np.array(pd.DataFrame({
             "price": [100, 99, 98, 97, 96, 95, 94, 93, 92, 91],
-            "quantity": [130, 100, 100, 100, 100, 100, 100, 100, 100, 100],
-            "quantity_filled": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+            "quantity": [130, 100, 100, 100, 100, 100, 100, 100, 100, 100]
         })),     
         "asks": np.array(pd.DataFrame({
             "price": [101, 102, 103, 104, 105, 106, 107, 108, 109, 110],
-            "quantity": [120, 100, 100, 100, 100, 100, 100, 100, 100, 100],
-            "quantity_filled": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+            "quantity": [120, 100, 100, 100, 100, 100, 100, 100, 100, 100]
         }))  
     }
-
-    print()
-
+    print(BEAR["asks"])
 
     #print(createSyntheticETF({"security1": BULL, "security2": BEAR}, "asks"))
         
@@ -211,7 +261,10 @@ if __name__ == "__main__":
         findOptimalArbitrageQty(BULL["bids"], BULL["asks"], 5)
         return None
     
-    #print(BULL["asks"])
-    print(findOptimalArbitrageQty(BULL["bids"], BULL["asks"], 5))
-    #generate synthetic ETF book
-    print(timeit.timeit(TESTcreateSyntheticETF, number=1000))
+    #print(timeit.timeit(TESTcreateSyntheticETF, number=1000))
+
+    def TESTisProfitable():
+        isProfitable(BULL["bids"], "bids", 5)
+        return None
+    
+    print(isProfitable(99, BEAR["bids"], "bid", 500))

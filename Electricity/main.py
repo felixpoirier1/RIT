@@ -1,4 +1,4 @@
-from tradeapp import TradingApp, LOG_COLORS
+from tradeapp.tradeapp import TradingApp, LOG_COLORS
 
 import matplotlib.pyplot as plt
 import time
@@ -121,6 +121,7 @@ def newsInfoFounder(news: list):
     # loop through each news item in the list
     for j in news:
         # determine the type of news item based on its headline
+        print(j)
         typeReturn = textAnalysis.returnType(j["headline"])
 
         # if the news item is about temperature
@@ -278,7 +279,7 @@ def main(app):
     
     while True:
         time.sleep(0.001)
-        streamElements(app,role=3)
+        streamElements(app,role=1)
         
    
         
@@ -287,7 +288,7 @@ def main(app):
 
 
 if __name__ == "__main__":
-    app = TradingApp("9999", "SNLJLYXD")
+    app = TradingApp("9999", "0CEN4JP9")
 
     # shared data contains the data that will be shared between processes
     # it's important that data that is stored in shared_data and is declared using mp.Value,
