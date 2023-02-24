@@ -10,6 +10,7 @@ import time
 import multiprocessing as mp
 import logging
 import timeit
+from sklearn.linear_model import LinearRegression
 
 # access the logger defined in the TradingApp class
 logger = TradingApp.logger
@@ -82,7 +83,7 @@ def streamPrice(app : TradingApp, **s_d):
 
         #print(s_d["tickers_bid"][-1])
         if s_d["streaming_started"].value == False:
-            time.sleep(1)
+            time.sleep(0.5)
         #always use the .value attribute when accessing shared single value (mp.Value)
         s_d["streaming_started"].value = True
 
@@ -288,9 +289,76 @@ def main(app : TradingApp, **s_d):
                         print("tender failed")
 
 def marketmaking(app : MyTradingApp, **s_d):
+    # hist_spread:
+    # 0: time
+    # 1: bid
+    # 2: ask
+    # 3: spread
+    # 4: bid curve
+    # 5: ask curve
+    hist_spread = np.zeros((1, 6))
+    model = LinearRegression()
+    model.coef_ = np.array([[0]])
+    ritc_pos = 0
+
     while True:
-        app.getSecuritiesBook("RITC", 10, False)
-        time.sleep(1)
+        tick = s_d["tick"].value
+        book = app.getSecuritiesBook("RITC", 6, False)
+
+        book_bids = np.array([[float(book["bids"][i]["price"]), int(book["bids"][i]["quantity"] - book["bids"][i]["quantity_filled"])] for i in range(len(book["bids"]))])
+        book_asks = np.array([[float(book["asks"][i]["price"]), int(book["asks"][i]["quantity"] - book["asks"][i]["quantity_filled"])] for i in range(len(book["asks"]))])
+        
+        bid = s_d["tickers_bid"][s_d["tickers_name"].index("RITC")]
+        ask = s_d["tickers_ask"][s_d["tickers_name"].index("RITC")]
+        spread = ask - bid
+
+        if s_d["tick"].value not in hist_spread[:, 0]:
+            bid_curve_low = book_bids[:,1].sum()/(book_bids[0,0]-book_bids[-1,0])/100
+            bid_curve_mid = book_bids[:5,1].sum()/(book_bids[0,0]-book_bids[5,0])/100
+
+            ask_curve_low = book_asks[:,1].sum()/(book_asks[-1,0]-book_asks[0,0])/100
+            ask_curve_mid = book_asks[:5,1].sum()/(book_asks[5,0]-book_asks[0,0])/100
+
+            if ask_curve_low > bid_curve_low:
+
+                if bid_curve_low > bid_curve_mid and ritc_pos <= 0:
+                    if spread > hist_spread[:, 3].mean() + 0.01:
+                        qty = 1000
+                        code = app.postOrder("BUY", "RITC", 1000, bid + 0.01, "LIMIT")
+                        if code == 200:
+                            pos += qty
+                        time.sleep(0.1)
+
+                elif bid_curve_low < bid_curve_mid:
+                    if spread < hist_spread[:, 3].mean() - 0.01:
+                        code = app.postOrder("BUY", "RITC", 1000, bid - 0.01, "LIMIT")
+                        if code == 200:
+                            pos += qty
+                        time.sleep(0.1)
+            
+            elif ask_curve_low < bid_curve_low and ritc_pos >= 0:
+                
+                if ask_curve_low > ask_curve_mid:
+                    if spread > hist_spread[:, 3].mean() + 0.01:
+                        code = app.postOrder("SELL", "RITC", 1000, ask - 0.01, "LIMIT")
+                        if code == 200:
+                            pos -= qty
+                        time.sleep(0.1)
+                elif ask_curve_low < ask_curve_mid:
+                    if spread < hist_spread[:, 3].mean() - 0.01:
+                        code = app.postOrder("SELL", "RITC", 1000, ask + 0.01, "LIMIT")
+                        if code == 200:
+                            pos -= qty
+                        time.sleep(0.1)
+            
+
+
+
+            
+
+
+
+        time.sleep(0.5)
 
                     
                 
@@ -344,8 +412,8 @@ if __name__ == "__main__":
     streamthread = mp.Process(target=streamPrice, args=(app,), kwargs = shared_data)
     streamthread.start()
 
-    marketmakingthread = mp.Process(target=marketmaking, args=(app,), kwargs = shared_data)
-    marketmakingthread.start()
+    # marketmakingthread = mp.Process(target=marketmaking, args=(app,), kwargs = shared_data)
+    # marketmakingthread.start()
 
 
     main(app, **shared_data)

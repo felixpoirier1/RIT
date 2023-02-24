@@ -1,401 +1,205 @@
-from tradeapp.tradeapp import TradingApp 
+#import tradeapp module 
+from tradeapp.tradeapp import TradingApp, LOG_COLORS
+# for raw arbitrages
+from utils import createSyntheticETF, findOptimalArbitrageQty
+# for tenders
+from utils import isProfitable
 import matplotlib.pyplot as plt
+import numpy as np
 import time
 import multiprocessing as mp
-from multiprocessing.managers import BaseManager, NamespaceProxy
-import requests
-from scipy.stats import norm
-import numpy as np
-from math import log,exp,sqrt
-import re
-from mibian import BS
+import logging
+import timeit
+from sklearn.linear_model import LinearRegression
+
+# access the logger defined in the TradingApp class
+logger = TradingApp.logger
+logger.setLevel(logging.DEBUG)
+
+# create console handler and set level to debug
+ch = logging.StreamHandler()
+ch.setLevel(logging.INFO)
+
+# Define custom formatter with color codes
+class ColoredFormatter(logging.Formatter):
+    def format(self, record):
+        level_color = LOG_COLORS.get(record.levelno, '')
+        reset_color = '\033[0m'
+        message = super().format(record)
+        return level_color + message + reset_color
+
+# create formatter
+formatter = ColoredFormatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+
+# add formatter to ch
+ch.setFormatter(formatter)
+
+# add ch to logger
+logger.addHandler(ch)
+
+# My own trading app class
 class MyTradingApp(TradingApp):
+    class_name = "MyTradingApp"
     def __init__(self, host, API_KEY):
         super().__init__(host, API_KEY)
         
-    def varList(self):
-        nb_var = 11
-        list_var=[40]
-        list_var[0]="RTM" 
-        if (self.period ==2) or (self.tick >=300):
-            for i in range(1,nb_var):   
-                c2= "RTM2C"+str(i+44)
-                p2="RTM2P"+str(i+44)
-                list_var.extend([c2,p2])
-        else :
-            for i in range(1,nb_var):
-                
-                c1="RTM1C"+str(i+44)
-                p1= "RTM1P"+str(i+44)
-                c2= "RTM2C"+str(i+44)
-                p2="RTM2P"+str(i+44)
-                list_var.extend([c1,p1,c2,p2])
-                
-        return(list_var)
-    def black_scholes(self,S, K, T, r, sigma, IsCall):
-        
-        """This method returns the theorical price of an option
-            Parameters
-            ----------
-            S : Underlying asset price
-            K : Strike price
-            T : maturity 
-            r : risk free
-            IsCall : 1 for a call, -1 for a put """
-            
-        d1 = (log(S / K) + (r + 0.5 * sigma ** 2) * T) / (sigma * sqrt(T))
-        d2 = d1 - sigma * sqrt(T)
-        N_d1 = norm.cdf(d1*IsCall)
-        N_d2 = norm.cdf(d2*IsCall)
-        return IsCall*S * N_d1 - K*IsCall * exp(-r * T) * N_d2 
-    
-    def implied_volatility(self,price, S, K, T, r, IsCall,delta = None): #useless
-        """This method returns the implied volatility or the implied delta of an option
+##### General variables to share between processes #####
+streaming_started = mp.Value('b', False)
 
-            Parameters
-            ----------
-            Price : Price of the option
-            S : Underlying asset price
-            K : Strike price
-            T : maturity 
-            r : risk free
-            IsCall : 1 for a call, -1 for a put
-            delta : If <> None, the function returns implied delta
-            """
-    
-        tolerance=0.0001
-        max_iter=50
-        sigma = 0.23
-        vega = S * norm.pdf((log(S / K) + (r + 0.5 * sigma ** 2) * T) / (sigma * sqrt(T))) * sqrt(T)
-        for i in range(1,max_iter):
-            if sigma <= 0.001:
-                sigma = 0.001
-            price_diff = self.black_scholes(S, K, T, r, sigma, IsCall) - price
-            if abs(price_diff) < tolerance:
-                if delta==None:
-                    return sigma
+lock = mp.Lock()
+
+
+############## Streaming function #############
+
+def streamPrice(app : TradingApp, **s_d):
+    #s_d stands for shared_data (but shorter to make it easier to type and shorter to read)
+    while True:
+        tick = app.currentTick()
+        s_d["tick"].value = tick
+        
+        time.sleep(0.05)
+        #examples for modifying shared data stored in arrays
+        securities = app.getSecurities()
+        lock.acquire()
+        for index, ticker in enumerate(s_d["tickers_name"][:]):
+            s_d["tickers_ask"][index] = securities[ticker]["ask"]
+            s_d["tickers_bid"][index] = securities[ticker]["bid"]
+            s_d["tickers_pos"][index] = securities[ticker]["position"]
+        lock.release()
+        
+        if tick % 2 == 0:
+            time.sleep(0.1)
+            latest_tenders = app.getTenders()
+            print(latest_tenders)
+            lock.acquire()
+            if latest_tenders != None:
+                s_d["latest_tenders"].update(latest_tenders)
+                with open("tenders.txt", "a") as f:
+                    f.write(str(latest_tenders))
+            else:
+                s_d["latest_tenders"].clear()
+            lock.release()
+
+        
+
+        #print(s_d["tickers_bid"][-1])
+        if s_d["streaming_started"].value == False:
+            time.sleep(0.5)
+        #always use the .value attribute when accessing shared single value (mp.Value)
+        s_d["streaming_started"].value = True
+
+
+############### Main function ################
+
+def main(app : TradingApp, **s_d):
+    #s_d stands for shared_data (but shorter to make it easier to type and shorter to read)
+    #while True is a loop that will run forever (CTRL+C to stop it)
+    arb_type = -1
+    ARB_COMMISSION = 0.12
+    ARB_SLIPPAGE = 0.02
+    arb_qty_realized = 0
+    ARB_SLACK = ARB_COMMISSION + ARB_SLIPPAGE
+    arb_open = False
+    last_arb_tick = 0
+    time_till_double_down = 0
+    time_till_double_down = 2
+    swing_difference = 0.05
+
+    while True:
+        if s_d["streaming_started"].value:
+
+            
+            tick = s_d["tick"].value
+            if tick != None:
+                print(str(tick).zfill(3), end="\r")
+
+            # tender arbitrage logic
+            try:
+                latest_tenders = dict(s_d["latest_tenders"])
+            except:
+                # to prevent the error of reading a tender while it is being updated
+                latest_tenders = {}
+            if latest_tenders != {}:
+                id = list(latest_tenders.keys())[0]
+                price = latest_tenders[id]["price"]
+                qty = latest_tenders[id]["quantity"]
+                action = latest_tenders[id]["action"]
+
+                if action == "BUY":
+                    direction = "bids"
+                    action_to_close = "SELL"
+                elif action == "SELL":
+                    direction = "asks"
+                    action_to_close = "BUY"
+                
+                RITC_book = app.getSecuritiesBook("RITC", df = False)
+                # ignore the first two orders because they are the market maker orders and likely to be before accepting the tender
+                RITC_book = np.array([[int(RITC_book[direction][i]["quantity"] - RITC_book[direction][i]["quantity_filled"]), float(RITC_book[direction][i]["price"])] for i in range(len(RITC_book[direction]))])
+
+                if isProfitable(price, RITC_book, direction[:-1], qty):
+                    #tender_id = app.postTender(id)
+                    print("Tender is profitable")
                 else:
-                    return norm.cdf((log(S / K) + (r + 0.5 * sigma ** 2) * T) / (sigma * sqrt(T))) + 1*min(0,IsCall)
-            sigma = sigma-(price_diff / vega)
-        if delta == None:
-            return vega
-        else: 
-            return norm.cdf((log(S / K) + (r + 0.5 * sigma ** 2) * T) / (sigma * sqrt(T))) + 1*min(0,IsCall)
-        
-    def deltaclac(self,price, S, K, T,sigma, r, IsCall):
-        tol = 0.00001
-        delta = norm.cdf((log(S / K) + (r + 0.5 * sigma ** 2) * T) / (sigma * sqrt(T))) + 1*min(0,IsCall)
-        vega = S * norm.pdf((log(S / K) + (r + 0.5 * sigma ** 2) * T) / (sigma * sqrt(T))) * sqrt(T)
-        if vega !=0 :
-            for i in range(1,100): 
-                
-                if sigma <= 0.01:
-                    sigma = 0.25 
-                bsPrice = self.black_scholes(S,K,T,0,sigma,IsCall)
-                priceDiff = price - bsPrice
-                if abs(priceDiff)<tol: 
-                    delta = norm.cdf((log(S / K) + (r + 0.5 * sigma ** 2) * T) / (sigma * sqrt(T))) + 1*min(0,IsCall)
-                    break
-                delta = norm.cdf((log(S / K) + (r + 0.5 * sigma ** 2) * T) / (sigma * sqrt(T))) + 1*min(0,IsCall)
-                sigma = sigma + (priceDiff/(vega))
-            
-        return delta
-           
-    def price(self,ticker,type):
-        """This method sends the bid/ask price of a ticker
+                    print("Tender is not profitable")
 
-            Parameters
-            ----------
-            type : int
-                0 for bid price, 1 for ask price and 2 for lastprice"""
-                
-        book = self.getSecuritiesBook(ticker)
-        if type == 0:
-            bid = book.get("bids")["price"].item()
-            return bid
-        elif type==1:
-            ask = book.get("asks")["price"].item()
-            return ask
-        elif type==2:
-            lastPrice = 0.01 + book.get("bids")["price"].item()
-            return lastPrice
-        return None
-
-    def newsExtract(self,type):
-        """This method returns the delta, the mean vol or the annualized vol annonced with the latest news
-
-            Parameters
-            ----------
-            type : 0 if we want delta limit ,1 for the rest and 2 for the first annonced volatility
-            
-        # news timing 0,0,37,75,112,150,187,225,262"""
-        if type ==2: 
-            x = self.getNews(0,25,True)
-            lines = x["body"].split(".")
-            for line in lines:
-                if "annualized volatility is" in line:
-                    percentage_value = float(line.split(" ")[-1].strip("%")) *0.01
-        elif type ==1:            
-            x = self.getNews(25,1,True)
-            if x["news_id"]%2 ==0 and x["news_id"]>2 :
-                percentage_pattern = r'\d+\.?\d*%'
-                percentage_match = re.search(percentage_pattern, x["body"])
-                if percentage_match:
-                    percentage_value = float(percentage_match.group(0).strip('%')) / 100
                     
-            elif x["news_id"]%2 ==1 and x["news_id"]>=2:  
-                percentage_pattern = r'\d+\.?\d*%'
-                percentage_match = re.search(percentage_pattern, x["body"])
-                if percentage_match:
-                    bottomVol = int(percentage_match.group(0).strip('%'))
-                percentage_value = bottomVol +0.025
-                #bottom/top spread is constant and equal to 5% 
-            
-        elif type==0: 
-            x = self.getNews(1,25,True)
-            lines = x["body"].split(" and ")
-            for line in lines:
-                if "delta limit for this heat is" in line:
-                    percentage_value= float(line.split(" ")[-1].replace(",", ""))
-        return percentage_value
-    
-    def passOrder(self,nList,posList,secList):
-        
-        buyPosMod = posList[0]
-        sellPosMod = posList[1]
-        adjBuyPosMod = posList[2]
-        adjSellPosMod = posList[3]
-        oldSellPosMod = posList[4]
-        oldBuyPosMod = posList[5]
-        # Order command
-        if secList[3]!=secList[1] and secList[2]!=secList[0]:  # case full new strat
-            for i in range(1,max(nList)):
-                if i<= nList[4] : 
-                    if oldBuyPosMod>=100:
-                        self.postOrder("SELL",secList[2],100)
-                        oldBuyPosMod -= 100
-                    elif oldBuyPosMod>0:
-                        self.postOrder("SELL",secList[2],oldBuyPosMod)
-                        oldBuyPosMod =0
-                if i<= nList[5] : 
-                    if oldSellPosMod>=100:
-                        self.postOrder("BUY",secList[3],100)
-                        oldSellPosMod -= 100
-                    elif oldSellPosMod>0:
-                        self.postOrder("BUY",secList[3],oldSellPosMod)
-                        oldSellPosMod =0     
-                if i<= nList[0] : 
-                    if buyPosMod>=100:
-                        self.postOrder("BUY",secList[0],100)
-                        buyPosMod -= 100
-                    elif buyPosMod>0:
-                        self.postOrder("BUY",secList[0],buyPosMod)
-                        buyPosMod = 0
-                    
-                if i<= nList[1] : 
-                    if sellPosMod>=100:
-                        self.postOrder("SELL",secList[1],100)
-                        sellPosMod -= 100
-                    elif sellPosMod>0:
-                        self.postOrder("SELL",secList[1],sellPosMod)
-                        sellPosMod =0
+                
 
-        elif secList[2]!=secList[0]:  # case new buy 
-            for i in range(1,max(nList[0],nList[3],nList[4])):
-                if i<= nList[4] : 
-                    if oldBuyPosMod>=100:
-                        self.postOrder("SELL",secList[2],100)
-                        oldBuyPosMod -= 100
-                    elif oldBuyPosMod>0:
-                        self.postOrder("SELL",secList[2],oldBuyPosMod)
-                        oldBuyPosMod =0
-                if i<= nList[3] : 
-                    if adjSellPosMod>=100:
-                        self.postOrder(adjSellDirection,secList[3],100)
-                        adjSellPosMod -= 100
-                    elif adjSellPosMod>0:
-                        self.postOrder(adjSellDirection,secList[3],adjSellPosMod)
-                        adjSellPosMod =0     
-                if i<= nList[0] : 
-                    if buyPosMod>=100:
-                        self.postOrder("BUY",secList[0],100)
-                        buyPosMod -= 100
-                    elif buyPosMod>0:
-                        self.postOrder("BUY",secList[0],buyPosMod)
-                        buyPosMod = 0
-        
-        elif secList[3]!=secList[1]:  # case new sell
-            for i in range(1,max(nList[1],nList[2],nList[5])):
-                if i<= nList[5] : 
-                    if oldSellPosMod>=100:
-                        self.postOrder("BUY",secList[3],100)
-                        oldSellPosMod -= 100
-                    elif oldSellPosMod>0:
-                        self.postOrder("BUY",secList[3],oldSellPosMod)
-                        oldSellPosMod =0
-                if i<= nList[2] : 
-                    if adjBuyPosMod>=100:
-                        self.postOrder(adjBuyDirection,secList[2],100)
-                        adjBuyPosMod -= 100
-                    elif adjBuyPosMod>0:
-                        self.postOrder(adjBuyDirection,secList[2],adjBuyPosMod)
-                        adjBuyPosMod =0     
-                if i<= nList[1] : 
-                    if sellPosMod>=100:
-                        self.postOrder("SELL",secList[1],100)
-                        sellPosMod -= 100
-                    elif sellPosMod>0:
-                        self.postOrder("SELL",secList[1],sellPosMod)
-                        sellPosMod = 0
-        else:  # case no new à modif
-            for i in range(1,max(nList[2],nList[3])):
-                if i<= nList[2] : 
-                    if adjBuyPosMod>=100:
-                        self.postOrder(adjBuyDirection,secList[2],100)
-                        adjBuyPosMod -= 100
-                    elif adjBuyPosMod>0:
-                        self.postOrder(adjBuyDirection,secList[2],adjBuyPosMod)
-                        adjBuyPosMod =0     
-                if i<= nList[3] : 
-                    if adjSellPosMod>=100:
-                        self.postOrder(adjSellDirection,secList[3],100)
-                        adjSellPosMod -= 100
-                    elif adjSellPosMod>0:
-                        self.postOrder(adjSellDirection,secList[3],adjSellPosMod)
-                        adjSellPosMod =0
-        
+
+
+
+
 
 if __name__ == "__main__":
-    app = MyTradingApp("9999", "EG6SMVYC")
+    app = MyTradingApp("9999", "0CEN4JP9")
+    # shared data contains the data that will be shared between processes
+    # it's important that data that is stored in shared_data and is declared using mp.Value,
+    # or mp.Array otherwise it will not be shared between processes.
+    # I recommend declaring these variables right after the imports and before the functions
+    # see above for an examples.
 
-    realVol = app.newsExtract(2)  # corriger partout mytradingapp par app
-    varList = app.varList()
-    k =len(varList)
-    priceList = [0]*k
-    theoPriceList=[0]*k
-    diffList = [0]*k 
-    callList = [0]*int((k+1)/2)
-    putList = [0]*int((k+1)/2)
-    nList = []
-    posList=[]
-    secList=[]
-    directionList=[]
-    oldSellSec=0
-    oldSellPos = 0
-    oldBuySec = 0
-    oldBuyPos = 0
-    oldBuyPos = 0
-    oldSellPos=0
-    deltalimit = app.newsExtract(0) * 0.98
-    while True:  
-        tick =app.currentAbsoluteTick()
-        maturity1M = (300-tick)/3600
-        maturity2M = (600-tick)/3600
-        if tick >300 and tick <305: # refresh list of secuities when the 1st month option expires
-            varList = app.varList() 
-            k =len(varList)
-            priceList = [0]*k
-            posList = [0]*k
-            theoPriceList=[0]*k
-            diffList = [0]*k
-            
-            callList = [0]*int((k+(k%2))/2) # list of call option price
-            putList = [0]*int((k+(k%2))/2) # list of put option price
-        
-        if  tick in range(37,40) or tick in range(75,78) or tick in range(112,115) or tick in range(150,153) or tick in range(187,190) or tick in range(225,228) or tick in range(262,265) or tick in range(300,303) or tick in range(337,340) or tick in range(375,378) or tick in range(412,415) or tick in range(450,453) or tick in range(487,490) or tick in range(525,528):
-            realVol = app.newsExtract(1) # extract the last news info about annualized volatility
-            # vol a update, on prend la news effective alors que l'intervalle l'est pas 
-            
-        priceList[0]= app.price(varList[0],2) # RTM price
-        for i in range(1,k): # price list, theorical price list, differences list, call List and put list
-            priceList[i]= app.price(varList[i],2)
-            if (i%4 == 3 or i%4 ==0) or tick>=300 :
-                theoPriceList[i]=app.black_scholes(priceList[0],45+int((i-1)/4),maturity2M,0,realVol,(-1)**(1+i)) 
-            else: 
-                theoPriceList[i]=app.black_scholes(priceList[0],(45+int((i-1)/4)),maturity1M,0,realVol,((-1)**(1+i)))
-                
-            diffList[i] = theoPriceList[i]-priceList[i]
-            if i%2==1:
-                callList[int((i+1)/2)]=diffList[i]
-            else:
-                putList[int(i/2)]=diffList[i]
+    # retrieves the list of tickers and stores it in a shared lis
+    
+    securities_info = app.getSecurities()
+    tickers_name_ = list(securities_info.keys())
+    tickers_name = [mp.Array('c', 1) for i in range(len(tickers_name_))]
+    tickers_name[:] = list(securities_info.keys())
 
-        maxdiff=max(diffList)
-        mindiff = min(diffList)
-        topdiff = max(maxdiff,abs(mindiff))
-        buyNumber = diffList.index(maxdiff) 
-        sellNumber = diffList.index(mindiff)
-        
-        if (buyNumber*sellNumber)%2 ==1: # for the strategy, we need to have 2 calls or 2 puts, so we have to change the security if it's necessary
-            if topdiff == maxdiff:
-                if buyNumber%2==1:
-                    sellNumber=(callList.index(min(callList))*2)+1
-                else:
-                    sellNumber=(putList.index(min(putList))*2)
-            else:
-                if sellNumber%2==1:
-                    buyNumber=(callList.index(max(callList))*2)+1
-                else:
-                    buyNumber=(putList.index(max(putList))*2)
-                             
-        buySec = varList[buyNumber] # the most underpriced option
-        sellSec = varList[sellNumber] # the most overpriced option
-        if buyNumber != 0: # calculate for each case the buy implied delta 
-            if buyNumber%4 == 0 or buyNumber%4==3 or tick>=300: 
-                buyDelta = app.deltaclac(priceList[buyNumber],priceList[0],45+((buyNumber-1)/4),maturity2M,realVol,0,(-1)**(1+buyNumber))
-            else:
-                buyDelta = app.deltaclac(priceList[buyNumber],priceList[0],45+((buyNumber-1)/4),maturity1M,realVol,0,(-1)**(1+buyNumber))
-        else: 
-            buyDelta = 1
-        if sellNumber != 0: # calculate for each case the sell implied delta
-            if sellNumber%4 == 0 or sellNumber%4==3 or tick>=300:
-                sellDelta = app.deltaclac(priceList[sellNumber],priceList[0],45+((sellNumber-1)/4),maturity2M,realVol,0,(-1)**(1+sellNumber))
-            else:
-                sellDelta = app.deltaclac(priceList[sellNumber],priceList[0],45+((sellNumber-1)/4),maturity2M,realVol,0,(-1)**(1+sellNumber))   
-        else: 
-            sellDelta =1
-  
-        if abs(maxdiff/buyDelta)> abs(mindiff/sellDelta):
-            
-            sellPos = int(-1500*buyDelta)/(sellDelta-buyDelta)+1
-            buyPos =1500-sellPos +int(abs(deltalimit/buyDelta))    
-        else:   
-            
-            buyPos = int(-1500*sellDelta)/(buyDelta-sellDelta)+1
-            sellPos =1500-buyPos +int(abs(deltalimit/sellDelta))
-        
-        secList.extend([buySec,sellSec,oldBuySec,oldSellSec])
-        
-        adjBuyPos = abs(buyPos-oldBuyPos)
-        adjSellPos = abs(sellPos- oldSellPos)
-        posList.extend([buyPos,sellPos,adjBuyPos,adjSellPos,oldBuyPos,oldSellPos])
-        
-        n1 = int(buyPos/100)+1
-        n2 = int(sellPos/100) +1
-        n3 = int(adjBuyPos/100) +1
-        n4 = int(adjSellPos/100) +1
-        n5 = int(oldBuyPos/100)+1
-        n6 = int(oldSellPos/100)+1
-        nList.extend([n1,n2,n3,n4,n5,n6])
+    tickers_bid = mp.Array('f', len(tickers_name_))
+    tickers_ask = mp.Array('f', len(tickers_name_)) 
+    tickers_pos = mp.Array('f', len(tickers_name_))
 
-        
-        if buyPos>= oldBuyPos:
-            adjBuyDirection = "BUY"
-        else: 
-            adjBuyDirection = "SELL"
-        if sellPos>=oldSellPos:
-            adjSellDirection = "BUY"
-        else:
-            adjSellDirection = "SELL"
-        directionList.extend([adjBuyDirection,adjSellDirection])
+    latest_tenders = {}
+    mgr = mp.Manager()
+    latest_tenders = mgr.dict()
+    latest_tenders.update(latest_tenders)
 
-        app.passOrder(nList,posList,secList)    
+    tick = mp.Value('i', 0)
 
-            
-        oldSellSec=sellSec
-        oldSellPos = sellPos
-        oldBuySec = buySec
-        oldBuyPos = buyPos
-        time.sleep(0.2)
-   
-        
+    qty_filled = mp.Array('i', len(tickers_name_))
+
+    shared_data = {
+                    'streaming_started': streaming_started,
+                    'tickers_name': tickers_name,
+                    "tickers_bid": tickers_bid,
+                    "tickers_ask": tickers_ask,
+                    "tickers_pos": tickers_pos,
+                    "latest_tenders": latest_tenders,
+                    "qty_filled": qty_filled,
+                    "tick": tick,
+                    "lock": lock
+                    }
+
+    # streamthread is a variable which will be used to stream data to data declared in shared_data
+    streamthread = mp.Process(target=streamPrice, args=(app,), kwargs = shared_data)
+    streamthread.start()
+
+    # marketmakingthread = mp.Process(target=marketmaking, args=(app,), kwargs = shared_data)
+    # marketmakingthread.start()
+
+
+    main(app, **shared_data)
+
+
+
+
