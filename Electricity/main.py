@@ -7,6 +7,8 @@ import logging
 import re
 import pandas as pd
 import array
+import pandas as pd
+
 
 
 ##### Variables to share between processes #####
@@ -121,7 +123,6 @@ def newsInfoFounder(news: list):
     # loop through each news item in the list
     for j in news:
         # determine the type of news item based on its headline
-        print(j)
         typeReturn = textAnalysis.returnType(j["headline"])
 
         # if the news item is about temperature
@@ -204,28 +205,81 @@ def newsInfoFounder(news: list):
         for key in sorted(PriceVol, key=int, reverse=True):
             PriceVolLog[key] = PriceVol[key]
     return(InfoDic,TempLog,SunlightLog,TenderInfoLog,FineLog,SpotVolLog,PriceVolLog)      
+#This 
+# This function returns the first three key-value pairs in the dictionary as a new dictionary.
+# If the original dictionary has less than three key-value pairs, it returns the entire dictionary.
+def get_first_three_values(my_dict):
+    # Get the first three keys in the dictionary.
+    first_three_keys = list(my_dict.keys())[:3]
+    # Create a new dictionary containing only the key-value pairs with the first three keys.
+    first_three_values = {k: v for k, v in my_dict.items() if k in first_three_keys}
+    # If the new dictionary is empty, return the first key-value pair in the original dictionary.
+    return first_three_values or my_dict.get(list(my_dict.keys())[0], {})
 
-
-    
-    
+# This function takes a dictionary whose keys are strings of integers and returns a new dictionary
+# with the same key-value pairs, but with the keys sorted as integers.
 def reorder_dict_by_int_keys(d):
     return {k: d[k] for k in sorted(d, key=lambda x: int(x))}
 
-    
+# This function takes a dictionary whose values are lists containing strings of integers and/or '.' 
+# and returns a list of the same values, but with any '.' removed and the integers converted to integers.
+# If a value contains only one integer, it is returned as a single value rather than a tuple.
+def get_all_values(d):
+    """
+    Returns all values of a dictionary, returning lists as lists and tuples as tuples.
+
+    Args:
+        d (dict): The dictionary to get the values from.
+
+    Returns:
+        list: A list containing all the values of the dictionary, with lists returned as lists and tuples returned as tuples.
+    """
+    result = []
+    for value in d.values():
+        if isinstance(value, list):
+            result.append(value)
+        elif isinstance(value, tuple):
+            result.append(value)
+        else:
+            result.append([value])
+    return result
+
+def check_float(input_value):
+    """
+    This function takes an input value and checks if it is a float. If it is a float, it returns a new array where the
+    first element is a list containing the float value. Otherwise, it returns the input value unchanged.
+    """
+    if isinstance(input_value, float):
+        array = [[input_value]]
+        return array
+    else:
+        return input_value
+
+def demand_function(x):
+    return((200-15*x+0.8*x**2))
+
+def predicted_prod(x):
+    return(6*x)
+
+def Average(lst):
+    return sum(lst) / len(lst)
     
 def streamElements(app,role):
     global new
     global period
     global sunLight
+    global spot_volume
+    
     bidask = app.getSecuritiesBook("NG")
     bid = float(bidask["asks"].iloc[0]["price"])
     ask = float(bidask["bids"].iloc[0]["price"])
-    new = app.getNews()
+    new = app.getNews(return_latest=False)
     
     period = app.getCaseDetails()["period"]
     
     newsinfo=newsInfoFounder(new)
     spot_securities = {
+    1:"NG",
     2: "ELEC-day2",
     3: "ELEC-day3",
     4: "ELEC-day4",
@@ -241,29 +295,77 @@ def streamElements(app,role):
     if role==3:
         print("Trader Functions")
         todayBidSpot=bidaskSpot
+        ELECF=app.getSecuritiesBook("ELEC")
         spot_volume=next(iter(newsinfo[5].values()))
         PriceVol=next(iter(newsinfo[6].values()))
         possibleTenders=newsinfo[3]
         fines=newsinfo[4]
         tendeoffer=app.getTenders()
+        print(tendeoffer)
     elif role==2:
         print("Distributor Function")
         todayBidSpot=bidaskSpot
-        spot_volume=next(iter(newsinfo[5].values()))
-        PriceVol=next(iter(newsinfo[6].values()))
+        try:
+            spot_volume=next(iter(newsinfo[5].values()))
+        except:
+            pass
+        try:
+            PriceVol=next(iter(newsinfo[6].values()))
+        except:
+            pass
         fines=newsinfo[4]
-        temperature=newsinfo[1]
-        print(temperature)
+        try:
+            for j in my_list:
+                if len(j)==1:
+                    sunlightList.append(demand_function(j[0]))
+                if len(j)==2:
+                    average=Average(j)
+                    sunlightList.append(demand_function(average))
+            projecteddemand=sunlightList[0]
+            print(projecteddemand)
+        except:
+            pass
+        
     elif role==1:
         print("Producer Function")
-        sunLight=newsinfo[2]
+        inputs=pd.read_excel("DemandVariable.xlsx")
+        demand=inputs["Demand Input"][0]
+        print(demand)
         
-        todayBidSpot=bidaskSpot
-        ngPrice=bidask
-        spot_volume=next(iter(newsinfo[5].values()))
-        PriceVol=next(iter(newsinfo[6].values()))
+        sunlight =get_first_three_values(newsinfo[2])
+        
+        my_list=get_all_values(sunlight)
+        sunlightList = []
+        try:
+            for j in my_list:
+                if len(j)==1:
+                    sunlightList.append(j[0])
+                if len(j)==2:
+                    average=Average(j)
+                    sunlightList.append(average)
+            projectedprotect=sunlightList[0]
+            projectedProduction=predicted_prod(projectedprotect)
+        except:
+            pass
+        print("sunprod: ",projectedProduction)
+        print("NgBuy", (demand-projectedProduction)*500/(100/8))
+        
+        try:
+            todayBidSpot=bidaskSpot
+        except:
+            pass
+        try:
+            ngPrice=bidask
+        except:
+            pass
+        try:
+            PriceVol=next(iter(newsinfo[6].values()))
+        except:
+            pass
         fines=newsinfo[4]
-        print(sunLight)
+    
+    time.sleep(1)
+       
 
 ############### Main function ################
 
